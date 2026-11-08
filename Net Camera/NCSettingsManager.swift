@@ -16,6 +16,12 @@ class NCSettingsManager {
     /// for, later.
     private(set) var crop: NCFrameCrop = .none
 
+    /// The capture resolution of the camera named by `deviceName`, as it was
+    /// when the settings were saved. Held as dimensions rather than as an index
+    /// into the camera's formats, whose order is the driver's to change.
+    /// `nil` when none has been saved.
+    private(set) var resolution: (width: Int, height: Int)?
+
     // MARK: - Frame Properties
     private(set) var frameX: Float = 100
     private(set) var frameY: Float = 100
@@ -58,6 +64,10 @@ class NCSettingsManager {
         crop = value
     }
 
+    func setResolution(_ value: (width: Int, height: Int)?) {
+        resolution = value
+    }
+
     func setFrameProperties(x: Float, y: Float, width: Float, height: Float) {
         frameX = x
         frameY = y
@@ -81,6 +91,14 @@ class NCSettingsManager {
             left: UserDefaults.standard.object(forKey: "cropLeft") as? Int ?? 0,
             bottom: UserDefaults.standard.object(forKey: "cropBottom") as? Int ?? 0,
             right: UserDefaults.standard.object(forKey: "cropRight") as? Int ?? 0)
+        if let width = UserDefaults.standard.object(forKey: "resolutionWidth") as? Int,
+            let height = UserDefaults.standard.object(forKey: "resolutionHeight") as? Int,
+            width > 0, height > 0
+        {
+            resolution = (width, height)
+        } else {
+            resolution = nil
+        }
 
         frameWidth = UserDefaults.standard.object(forKey: "frameW") as? Float ?? 0
         frameHeight = UserDefaults.standard.object(forKey: "frameH") as? Float ?? 0
@@ -95,6 +113,9 @@ class NCSettingsManager {
 
     func saveSettings() {
         logSettings(label: "saveSettings")
+        // What is on disk is what a hot-plug falls back to from now on, not only after a
+        // relaunch.
+        savedDeviceName = deviceName
         UserDefaults.standard.set(deviceName, forKey: "deviceName")
         UserDefaults.standard.set(isBorderless, forKey: "borderless")
         UserDefaults.standard.set(isMirrored, forKey: "mirrored")
@@ -105,6 +126,13 @@ class NCSettingsManager {
         UserDefaults.standard.set(crop.left, forKey: "cropLeft")
         UserDefaults.standard.set(crop.bottom, forKey: "cropBottom")
         UserDefaults.standard.set(crop.right, forKey: "cropRight")
+        if let resolution {
+            UserDefaults.standard.set(resolution.width, forKey: "resolutionWidth")
+            UserDefaults.standard.set(resolution.height, forKey: "resolutionHeight")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "resolutionWidth")
+            UserDefaults.standard.removeObject(forKey: "resolutionHeight")
+        }
         UserDefaults.standard.set(frameX, forKey: "frameX")
         UserDefaults.standard.set(frameY, forKey: "frameY")
         UserDefaults.standard.set(frameWidth, forKey: "frameW")
@@ -121,13 +149,14 @@ class NCSettingsManager {
     func logSettings(label: String) {
         NSLog(
             "%@ : %@,%@,%@borderless,%@mirrored,%@upsideDown,%@aspectRetioFixed,position:%d,"
-                + "crop(t,l,b,r):%d,%d,%d,%d",
+                + "crop(t,l,b,r):%d,%d,%d,%d,resolution:%dx%d",
             label, deviceName, savedDeviceName,
             isBorderless ? "+" : "-",
             isMirrored ? "+" : "-",
             isUpsideDown ? "+" : "-",
             isAspectRatioFixed ? "+" : "-",
             position,
-            crop.top, crop.left, crop.bottom, crop.right)
+            crop.top, crop.left, crop.bottom, crop.right,
+            resolution?.width ?? 0, resolution?.height ?? 0)
     }
 }

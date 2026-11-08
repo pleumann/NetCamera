@@ -62,7 +62,6 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     let defaultDeviceIndex: Int = 0
     var selectedDeviceIndex: Int = 0
 
-    var savedDeviceName: String = "-"
     var devices: [AVCaptureDevice]!
     var captureSession: AVCaptureSession!
     var videoOutput: AVCaptureVideoDataOutput!
@@ -367,10 +366,11 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             deviceMenu.addItem(emptyItem)
         }
 
-        // Fall back to the first device: if the selected one has just been unplugged there is
-        // no session device left to match against. refreshSourceMenuState() settles the real
-        // selection once the menu is built.
-        self.selectedDeviceIndex = defaultDeviceIndex
+        // Fall back to the camera the settings were saved with, or else the first device:
+        // before capture has started, or once the selected camera has been unplugged, there
+        // is no session device to match against. refreshSourceMenuState() settles the real
+        // selection once the menu is built, and keeps a camera that is already running.
+        self.selectedDeviceIndex = self.savedDeviceIndex ?? defaultDeviceIndex
 
         for device: AVCaptureDevice in self.devices {
             // The device item carries neither an action nor a key equivalent. AppKit fires
@@ -391,6 +391,14 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
         selectSourceMenu.submenu = deviceMenu
         refreshSourceMenuState()
+    }
+
+    /// Where the camera the settings were saved with sits in the device list, if it is
+    /// connected. Matched by name, the only thing the settings keep of it.
+    private var savedDeviceIndex: Int? {
+        let name: String = NCSettingsManager.shared.savedDeviceName
+        guard !name.isEmpty else { return nil }
+        return self.devices?.firstIndex { $0.localizedName == name }
     }
 
     /// The device the capture session is currently running on, or nil before the first
@@ -511,6 +519,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             self.captureSession.startRunning()
 
             self.deviceName = device.localizedName
+            self.adoptSavedResolution(for: device)
             // Before applySettings, which sizes the window from the format now in force.
             self.applyChosenResolution(to: device)
             self.applySettings()
@@ -596,6 +605,9 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
     // MARK: - Settings Actions
     @IBAction func saveSettings(_ sender: NSMenuItem) {
+        // The resolution belongs with the camera named in the settings, so it is the running
+        // camera's, or none at all when nothing is running.
+        NCSettingsManager.shared.setResolution(self.sourcePictureSize)
         NCSettingsManager.shared.setFrameProperties(
             x: Float(self.window.frame.minX),
             y: Float(self.window.frame.minY),
@@ -969,6 +981,34 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         // that applySettings does — so relock the window to the shape now being captured.
         self.fixAspectRatio()
         self.refreshSourceMenuState()
+    }
+
+    /// Takes the saved resolution as the choice for the camera it was saved with, the first
+    /// time that camera starts.
+    ///
+    /// Only when nothing has been chosen for the camera yet, so a resolution picked from the
+    /// menu since launch is never overridden by the saved one. The saved dimensions are
+    /// matched the way the menu matches them: the first format of that size stands for it.
+    /// A camera that no longer offers the size simply starts at its own default.
+    func adoptSavedResolution(for device: AVCaptureDevice) {
+        guard self.chosenFormatIndex[device.uniqueID] == nil,
+            device.localizedName == NCSettingsManager.shared.savedDeviceName,
+            let saved = NCSettingsManager.shared.resolution
+        else { return }
+
+        guard
+            let formatIndex = device.formats.firstIndex(where: { format in
+                let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                return Int(dims.width) == saved.width && Int(dims.height) == saved.height
+            })
+        else {
+            NSLog(
+                "%@ no longer offers the saved %dx%d; leaving it at its default",
+                device.localizedName, saved.width, saved.height)
+            return
+        }
+        NSLog("Restoring %dx%d on %@", saved.width, saved.height, device.localizedName)
+        self.chosenFormatIndex[device.uniqueID] = formatIndex
     }
 
     /// Put the camera on the resolution chosen for it, if one has been.
