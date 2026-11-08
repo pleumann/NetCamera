@@ -47,7 +47,10 @@ Two projects, two different bargains. Neither is a criticism of the other.
   resolutions it advertises, and the submenu is always there. Quick Camera's own
   review of this feature asked for it to be hidden behind a preference, default off,
   so that new users would not meet an extra menu level; Net Camera's users want the
-  control, so it is unconditional.
+  control, so it is unconditional. A size the camera offers in more than one pixel
+  format is listed once per format, with its frame rate — a capture dongle's
+  uncompressed YUY2 is sharper but slower than its compressed stream, and which
+  one suits depends on the picture.
 
 - **A frame-based pipeline.** Quick Camera's frames never leave the preview layer.
   Net Camera's leave the capture session, are rotated and mirrored once, and are

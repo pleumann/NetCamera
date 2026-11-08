@@ -1,4 +1,47 @@
+import CoreVideo
 import XCTest
+
+/// The names and menu titles of pixel formats.
+final class NCPixelFormatTests: XCTestCase {
+    func testFourCharacterCodesReadAsText() {
+        XCTAssertEqual(NCPixelFormat.code(kCVPixelFormatType_422YpCbCr8_yuvs), "yuvs")
+        XCTAssertEqual(
+            NCPixelFormat.code(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange), "420v")
+        XCTAssertEqual(NCPixelFormat.code(kCVPixelFormatType_32BGRA), "BGRA")
+    }
+
+    /// Some pixel formats are numbers rather than characters; they are shown
+    /// in hex rather than as unprintable text.
+    func testCodesThatAreNotTextReadAsHex() {
+        XCTAssertEqual(NCPixelFormat.code(kCVPixelFormatType_32ARGB), "0x00000020")
+    }
+
+    func testKnownCodesHaveNamesAndUnknownOnesKeepTheirCode() {
+        XCTAssertEqual(NCPixelFormat.name(of: "yuvs"), "YUY2")
+        XCTAssertEqual(NCPixelFormat.name(of: "420v"), "YUV 4:2:0")
+        XCTAssertEqual(NCPixelFormat.name(of: "abcd"), "abcd")
+    }
+
+    /// A size with one pixel format keeps the title it always had; one with
+    /// several says which is which, and how fast.
+    func testMenuTitlesNameThePixelFormatOnlyWhereItDistinguishes() {
+        XCTAssertEqual(
+            NCPixelFormat.menuTitle(
+                width: 1280, height: 720, code: "420v", maxFrameRate: 30,
+                sizeHasSeveralFormats: false),
+            "1280x720")
+        XCTAssertEqual(
+            NCPixelFormat.menuTitle(
+                width: 720, height: 576, code: "yuvs", maxFrameRate: 25,
+                sizeHasSeveralFormats: true),
+            "720x576 (YUY2, 25 fps)")
+        XCTAssertEqual(
+            NCPixelFormat.menuTitle(
+                width: 720, height: 576, code: "420v", maxFrameRate: 59.94,
+                sizeHasSeveralFormats: true),
+            "720x576 (YUV 4:2:0, 60 fps)")
+    }
+}
 
 /// The profile store over a throwaway defaults domain, so nothing here reads
 /// or writes the app's real settings.
@@ -101,6 +144,26 @@ final class NCProfileStoreTests: XCTestCase {
         var withoutResolution = profile
         withoutResolution.resolution = nil
         XCTAssertEqual(NCProfile(dictionary: withoutResolution.dictionary), withoutResolution)
+
+        var withPixelFormat = profile
+        withPixelFormat.resolution = NCResolution(width: 720, height: 576, pixelFormat: "yuvs")
+        XCTAssertEqual(NCProfile(dictionary: withPixelFormat.dictionary), withPixelFormat)
+    }
+
+    /// A profile saved before pixel formats could be chosen names a size only,
+    /// and any format of that size satisfies it; one that names a pixel format
+    /// is satisfied by that format alone.
+    func testAResolutionWithoutPixelFormatTakesAnyFormatOfItsSize() {
+        let yuy2 = NCResolution(width: 720, height: 576, pixelFormat: "yuvs")
+        let yuv420 = NCResolution(width: 720, height: 576, pixelFormat: "420v")
+        let sizeOnly = NCResolution(width: 720, height: 576)
+
+        XCTAssertTrue(sizeOnly.isSatisfied(by: yuy2))
+        XCTAssertTrue(sizeOnly.isSatisfied(by: yuv420))
+        XCTAssertTrue(yuy2.isSatisfied(by: yuy2))
+        XCTAssertFalse(yuy2.isSatisfied(by: yuv420))
+        XCTAssertFalse(
+            sizeOnly.isSatisfied(by: NCResolution(width: 720, height: 480, pixelFormat: "yuvs")))
     }
 
     /// Unreadable entries are dropped rather than failing the whole list, and a

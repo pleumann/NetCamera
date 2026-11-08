@@ -2,11 +2,70 @@ import Foundation
 
 // MARK: - Resolution
 
-/// A capture resolution, held as dimensions rather than as an index into a
-/// camera's formats, whose order is the driver's to change.
-struct NCResolution: Equatable {
+/// A capture format: dimensions and, where it matters, pixel format. Held as
+/// these values rather than as an index into a camera's formats, whose order
+/// is the driver's to change.
+struct NCResolution: Hashable {
     let width: Int
     let height: Int
+
+    /// The pixel format as a four-character code — "yuvs", "420v" — or `nil`
+    /// for whichever format of this size the camera lists first, which is what
+    /// a profile saved before formats could be chosen holds.
+    var pixelFormat: String? = nil
+
+    /// Whether `other`, a format a camera actually offers, is what this one
+    /// asks for: the same size, and the same pixel format unless this one
+    /// names none.
+    func isSatisfied(by other: NCResolution) -> Bool {
+        width == other.width && height == other.height
+            && (pixelFormat == nil || pixelFormat == other.pixelFormat)
+    }
+}
+
+// MARK: - Pixel formats
+
+/// Names for the pixel formats cameras offer.
+///
+/// Only what the app is actually given is named. A capture device that sends
+/// MJPEG over USB arrives through macOS already decoded, as `420v`, and
+/// nothing in what the app is handed says it was ever MJPEG — while the same
+/// `420v` from a built-in camera never was. So `420v` is called what it is.
+enum NCPixelFormat {
+    /// A four-character code as text: `yuvs` for `kCVPixelFormatType_422YpCbCr8_yuvs`.
+    /// A code with bytes that are not printable is given in hex instead.
+    static func code(_ type: FourCharCode) -> String {
+        let bytes: [UInt8] = [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: type >> $0) }
+        guard bytes.allSatisfy({ (0x20..<0x7f).contains($0) }) else {
+            return String(format: "0x%08x", type)
+        }
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
+    /// The name a user is shown for a four-character code.
+    static func name(of code: String) -> String {
+        switch code {
+        case "yuvs": return "YUY2"
+        case "2vuy": return "UYVY"
+        case "420v": return "YUV 4:2:0"
+        case "420f": return "YUV 4:2:0 full range"
+        case "BGRA": return "BGRA"
+        case "dmb1": return "MJPEG"
+        default: return code
+        }
+    }
+
+    /// The title of a format's entry in the resolution menu. A size offered in
+    /// one pixel format is just the size, as it always was; one offered in
+    /// several says which this is and how fast it runs, because that is the
+    /// difference between them.
+    static func menuTitle(
+        width: Int, height: Int, code: String, maxFrameRate: Double, sizeHasSeveralFormats: Bool
+    ) -> String {
+        let size = "\(width)x\(height)"
+        guard sizeHasSeveralFormats else { return size }
+        return "\(size) (\(name(of: code)), \(Int(maxFrameRate.rounded())) fps)"
+    }
 }
 
 // MARK: - Profile
@@ -45,6 +104,7 @@ struct NCProfile: Equatable {
         static let deviceName = "deviceName"
         static let resolutionWidth = "resolutionWidth"
         static let resolutionHeight = "resolutionHeight"
+        static let pixelFormat = "pixelFormat"
         static let cropTop = "cropTop"
         static let cropLeft = "cropLeft"
         static let cropBottom = "cropBottom"
@@ -79,7 +139,9 @@ struct NCProfile: Equatable {
             let height = values(Key.resolutionHeight) as? Int,
             width > 0, height > 0
         {
-            resolution = NCResolution(width: width, height: height)
+            resolution = NCResolution(
+                width: width, height: height,
+                pixelFormat: (values(Key.pixelFormat) as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
         crop = NCFrameCrop(
             top: values(Key.cropTop) as? Int ?? 0,
@@ -106,6 +168,9 @@ struct NCProfile: Equatable {
         if let resolution {
             result[Key.resolutionWidth] = resolution.width
             result[Key.resolutionHeight] = resolution.height
+            if let pixelFormat = resolution.pixelFormat {
+                result[Key.pixelFormat] = pixelFormat
+            }
         }
         return result
     }

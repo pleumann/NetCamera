@@ -422,21 +422,18 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             deviceMenuItem.state = isActive ? .on : .off
             if isActive { self.selectedDeviceIndex = deviceIndex }
 
-            let activeDims = CMVideoFormatDescriptionGetDimensions(
-                device.activeFormat.formatDescription)
+            let active: NCResolution = Self.captureFormat(of: device.activeFormat)
             for item: NSMenuItem in deviceMenuItem.submenu?.items ?? [] {
                 guard let index = item.representedObject as? Int else { continue }
                 if item.action == #selector(deviceMenuChanged) {
                     item.state = isActive ? .on : .off
                 } else if device.formats.indices.contains(index) {
-                    // Resolution items are matched on dimensions, not on format identity: the
-                    // submenu lists each WxH once, so the active format is often a later
-                    // same-size entry that no menu item stands for individually.
-                    let dims = CMVideoFormatDescriptionGetDimensions(
-                        device.formats[index].formatDescription)
+                    // Resolution items are matched on size and pixel format, not on format
+                    // identity: the submenu lists each combination once, so the active format
+                    // is often another entry of the same combination that no menu item stands
+                    // for individually.
                     item.state =
-                        (dims.width == activeDims.width && dims.height == activeDims.height)
-                        ? .on : .off
+                        Self.captureFormat(of: device.formats[index]) == active ? .on : .off
                 }
             }
         }
@@ -602,11 +599,9 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// starts by itself: a profile whose camera is not plugged in falls back to another one
     /// for the moment, and must not be rewritten to name that other camera for good.
     private func recordRunningCameraInProfile() {
-        guard let device: AVCaptureDevice = self.activeCaptureDevice,
-            let size = self.sourcePictureSize
-        else { return }
+        guard let device: AVCaptureDevice = self.activeCaptureDevice else { return }
         NCSettingsManager.shared.setCamera(
-            device.localizedName, resolution: NCResolution(width: size.width, height: size.height))
+            device.localizedName, resolution: Self.captureFormat(of: device.activeFormat))
     }
 
     // MARK: - Display Actions
@@ -1007,26 +1002,31 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// At a camera's first start, only when nothing has been chosen for it yet, so a
     /// resolution picked from the menu since launch is never overridden. `overriding` is for
     /// switching profiles, when the profile's resolution is exactly what was asked for. The
-    /// dimensions are matched the way the menu matches them: the first format of that size
-    /// stands for it. A camera that no longer offers the size keeps the format it has.
+    /// format is found the way the menu finds it — the fastest of the formats with that size
+    /// and pixel format — or the fastest of that size, for a profile that names no pixel
+    /// format. A camera that no longer offers it keeps the format it has.
     func adoptSavedResolution(for device: AVCaptureDevice, overriding: Bool = false) {
         guard overriding || self.chosenFormatIndex[device.uniqueID] == nil,
             device.localizedName == NCSettingsManager.shared.deviceName,
             let saved: NCResolution = NCSettingsManager.shared.resolution
         else { return }
 
+        let candidates = device.formats.indices.filter {
+            saved.isSatisfied(by: Self.captureFormat(of: device.formats[$0]))
+        }
         guard
-            let formatIndex = device.formats.firstIndex(where: { format in
-                let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                return Int(dims.width) == saved.width && Int(dims.height) == saved.height
+            let formatIndex = candidates.max(by: {
+                Self.maxFrameRate(of: device.formats[$0]) < Self.maxFrameRate(of: device.formats[$1])
             })
         else {
             NSLog(
-                "%@ no longer offers the saved %dx%d; leaving it as it is",
-                device.localizedName, saved.width, saved.height)
+                "%@ no longer offers the saved %dx%d %@; leaving it as it is",
+                device.localizedName, saved.width, saved.height, saved.pixelFormat ?? "")
             return
         }
-        NSLog("Restoring %dx%d on %@", saved.width, saved.height, device.localizedName)
+        NSLog(
+            "Restoring %dx%d %@ on %@", saved.width, saved.height, saved.pixelFormat ?? "",
+            device.localizedName)
         self.chosenFormatIndex[device.uniqueID] = formatIndex
     }
 
@@ -1082,14 +1082,37 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         resolutionsMenu.addItem(selectItem)
         resolutionsMenu.addItem(NSMenuItem.separator())
 
+        // Devices can advertise the same size in several pixel formats — a capture dongle
+        // typically offers uncompressed YUY2 at a low frame rate and compressed video at a
+        // high one — and the same combination more than once. Each size and pixel format is
+        // listed once, in the order the device first lists it, and the fastest entry of that
+        // combination stands for it.
+        var order: [NCResolution] = []
+        var fastest: [NCResolution: Int] = [:]
         for (formatIndex, format) in device.formats.enumerated() {
-            let menuTitle: String = descriptionFor(resolution: format)
-            // Devices advertise the same dimensions once per pixel format, so list each
-            // size once and let the first entry of that size stand for it.
-            guard resolutionsMenu.indexOfItem(withTitle: menuTitle) == -1 else { continue }
+            let key: NCResolution = Self.captureFormat(of: format)
+            guard let best = fastest[key] else {
+                order.append(key)
+                fastest[key] = formatIndex
+                continue
+            }
+            if Self.maxFrameRate(of: format) > Self.maxFrameRate(of: device.formats[best]) {
+                fastest[key] = formatIndex
+            }
+        }
+
+        for key: NCResolution in order {
+            guard let formatIndex: Int = fastest[key] else { continue }
+            let formatsOfThisSize: Int = order.filter {
+                $0.width == key.width && $0.height == key.height
+            }.count
+            let title: String = NCPixelFormat.menuTitle(
+                width: key.width, height: key.height, code: key.pixelFormat ?? "",
+                maxFrameRate: Self.maxFrameRate(of: device.formats[formatIndex]),
+                sizeHasSeveralFormats: formatsOfThisSize > 1)
 
             let resolutionMenuItem: NSMenuItem = NSMenuItem(
-                title: menuTitle, action: #selector(sourceResolutionsMenuChanged),
+                title: title, action: #selector(sourceResolutionsMenuChanged),
                 keyEquivalent: "")
             resolutionMenuItem.target = self
             resolutionMenuItem.representedObject = formatIndex
@@ -1099,9 +1122,18 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         menuItem.submenu = resolutionsMenu
     }
 
-    private func descriptionFor(resolution: AVCaptureDevice.Format) -> String {
-        let dims = CMVideoFormatDescriptionGetDimensions(resolution.formatDescription)
-        return "\(dims.width)x\(dims.height)"
+    /// A camera format as size and pixel format, the terms the menu and the profiles use.
+    static func captureFormat(of format: AVCaptureDevice.Format) -> NCResolution {
+        let description: CMFormatDescription = format.formatDescription
+        let dims = CMVideoFormatDescriptionGetDimensions(description)
+        return NCResolution(
+            width: Int(dims.width), height: Int(dims.height),
+            pixelFormat: NCPixelFormat.code(CMFormatDescriptionGetMediaSubType(description)))
+    }
+
+    /// The highest frame rate a format supports, which is what it is run at.
+    static func maxFrameRate(of format: AVCaptureDevice.Format) -> Double {
+        format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0
     }
 
 
