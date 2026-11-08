@@ -1,3 +1,4 @@
+import AppKit
 import CoreMedia
 import CoreVideo
 import XCTest
@@ -28,6 +29,38 @@ final class NCStillCaptureTests: XCTestCase {
         // picture from the pipeline rather than from the screen.
         XCTAssertEqual(image.width, 6)
         XCTAssertEqual(image.height, 4)
+    }
+
+    // MARK: - Pasteboard
+
+    /// The copied picture comes back off the pasteboard as both PNG and TIFF,
+    /// each at the still's own size. A private pasteboard, so the test leaves
+    /// the user's clipboard alone.
+    func testACopiedStillIsOnThePasteboardAsPNGAndTIFFAtItsOwnSize() throws {
+        let distributor = NCFrameDistributor()
+        let delivered = expectation(description: "the request answered")
+        var captured: CGImage?
+        NCStillCapture.requestStill(from: distributor, timeout: 5.0) { result in
+            captured = try? result.get()
+            delivered.fulfill()
+        }
+        distributor.deliver(try makePixelBuffer(width: 6, height: 4), at: .zero)
+        wait(for: [delivered], timeout: 5.0)
+        let image = try XCTUnwrap(captured)
+
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("NCStillCaptureTests.\(UUID())"))
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.setString("something else", forType: .string)
+
+        XCTAssertTrue(NCStillCapture.copy(image, to: pasteboard))
+
+        XCTAssertNil(pasteboard.string(forType: .string), "the copy replaces what was there")
+        for type in [NSPasteboard.PasteboardType.png, .tiff] {
+            let data = try XCTUnwrap(pasteboard.data(forType: type), "\(type.rawValue)")
+            let read = try XCTUnwrap(NSBitmapImageRep(data: data), "\(type.rawValue)")
+            XCTAssertEqual(read.pixelsWide, 6, "\(type.rawValue)")
+            XCTAssertEqual(read.pixelsHigh, 4, "\(type.rawValue)")
+        }
     }
 
     // MARK: - Exactly once

@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import CoreImage
 import CoreMedia
@@ -106,6 +107,28 @@ final class NCStillCapture: NCFrameSink {
     ) {
         self.distributor = distributor
         self.completion = completion
+    }
+
+    // MARK: - Pasteboard
+
+    /// Puts a still on a pasteboard, replacing what was there, as PNG and as
+    /// TIFF: PNG for the applications that take it, TIFF because it is what
+    /// AppKit applications read first. Both carry the image's own pixels at
+    /// its own size. Returns whether the pasteboard took it.
+    @discardableResult
+    static func copy(_ image: CGImage, to pasteboard: NSPasteboard = .general) -> Bool {
+        let representation = NSBitmapImageRep(cgImage: image)
+        guard let png = representation.representation(using: .png, properties: [:]),
+            let tiff = representation.tiffRepresentation
+        else {
+            NSLog("NCStillCapture: the still could not be encoded for the pasteboard")
+            return false
+        }
+
+        pasteboard.clearContents()
+        let tookPNG = pasteboard.setData(png, forType: .png)
+        let tookTIFF = pasteboard.setData(tiff, forType: .tiff)
+        return tookPNG && tookTIFF
     }
 
     // MARK: - NCFrameSink

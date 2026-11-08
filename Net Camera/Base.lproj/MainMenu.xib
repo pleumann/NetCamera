@@ -115,6 +115,12 @@
                                     <action selector="saveImage:" target="494" id="2e0-wH-zXa"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Copy Picture" id="cPy-Pi-cT1">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="copyPicture:" target="494" id="cPy-Ac-tN1"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Borderless Mode" keyEquivalent="b" id="651">
                                 <connections>
                                     <action selector="borderless:" target="494" id="XSj-SB-hEo"/>

@@ -805,6 +805,31 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         }
     }
 
+    /// Copies the picture to the clipboard: the same still Save Image writes — cropped,
+    /// turned and mirrored, at the camera's resolution rather than the window's — without
+    /// a file in between.
+    @IBAction func copyPicture(_ sender: Any?) {
+        NSLog("Copy Picture menu item selected")
+        NCStillCapture.requestStill(from: self.frameDistributor) { [weak self] result in
+            switch result {
+            case .success(let image):
+                if !NCStillCapture.copy(image) {
+                    self?.errorMessage(
+                        message: "Unfortunately, the picture could not be copied to the clipboard.")
+                }
+            case .failure(let failure):
+                NSLog("Copy Picture failed: %@", String(describing: failure))
+                self?.errorMessage(message: failure.message)
+            }
+        }
+    }
+
+    /// Edit › Copy and ⌘C, when nothing nearer in the responder chain has anything to copy
+    /// — no text field being edited — copy the picture, which is all the window shows.
+    @IBAction func copy(_ sender: Any?) {
+        self.copyPicture(sender)
+    }
+
     /// The save panel: the filename pattern and the PNG write this app has
     /// always had, over an image that now comes from the pipeline.
     private func presentSavePanel(for image: CGImage) {
