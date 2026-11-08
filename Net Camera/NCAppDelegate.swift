@@ -230,6 +230,8 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         // stream has ended rather than left holding a connection that will
         // never carry another byte.
         self.mjpegSink.setLive(false)
+        // A recording ends with the picture, and keeps what it has.
+        self.movieRecorder?.stop()
 
         if self.captureSession != nil {
             // Late callbacks from a session being torn down would deliver the
@@ -315,6 +317,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// that bare title. Every state names itself here rather than leaving the
     /// title alone, so the signal survives having no camera.
     private func setWindowTitle(detail: String) {
+        self.windowTitleDetail = detail
         self.windowTitle = String(format: "Net Camera: [%@]", detail)
         self.window.title = self.windowTitle
         // Traced because the title is the app's own statement of what it is
@@ -752,6 +755,24 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// The Profile menu, built in code because its lower half is the list of profiles.
     var profileMenu: NSMenu?
 
+    // MARK: - Recording state
+
+    /// The recording in progress, if there is one.
+    var movieRecorder: NCMovieRecorder?
+
+    /// The Start/Stop Recording item, whose title follows whether one is running.
+    var recordMenuItem: NSMenuItem?
+
+    /// The lamp at the right-hand end of the title bar, red while a recording runs.
+    var recordingLamp: NSTitlebarAccessoryViewController?
+    var recordingLampImage: NSImageView?
+
+    /// The detail the window title last showed.
+    var windowTitleDetail: String = ""
+
+    /// Whether the app is waiting for a recording to finish before it quits.
+    var terminateAfterRecording: Bool = false
+
     @IBAction func showCropPanel(_ sender: NSMenuItem) {
         if let cropPanel {
             cropPanel.show(beside: self.window)
@@ -939,6 +960,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         // one and survive a launch that finds no camera at all.
         self.restoreWindow()
         self.installProfileMenu()
+        self.installRecordingMenu()
 
         // Listening before asking, so a camera plugged in while the permission
         // prompt is still on screen is not missed.
@@ -964,6 +986,15 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         // The listener is given up deliberately rather than left to the process
         // exiting, so a quit-and-relaunch always finds the port free.
         self.httpServer.stop()
+    }
+
+    /// Quitting during a recording finishes the file first. A movie file that is not
+    /// finished has no index and plays as nothing at all.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard self.movieRecorder != nil else { return .terminateNow }
+        self.terminateAfterRecording = true
+        self.movieRecorder?.stop()
+        return .terminateLater
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -68,6 +68,37 @@ enum NCPixelFormat {
     }
 }
 
+// MARK: - Recording options
+
+/// How a recording is sized: the picture as it is, or scaled to a fixed size.
+///
+/// Scaling exists for the sake of where recordings go next. A video site that
+/// receives a small picture scales it up itself, blurring pixel art and
+/// spending little bitrate on it; one that receives 2048x1536 treats it as a
+/// large video and leaves the pixels alone. It applies to the recording only:
+/// the window, the web stream and stills are never scaled by it.
+struct NCRecordingOptions: Equatable {
+    /// The size recordings are scaled to, or `nil` for the picture's own size.
+    var size: NCResolution?
+
+    /// Nearest-neighbour scaling, which keeps every edge hard but makes some
+    /// pixel columns and rows wider than others when the factor is not whole;
+    /// otherwise smooth scaling, which keeps them even but soft.
+    var isSharp: Bool = false
+
+    /// Whether the picture keeps its proportions inside `size`, with black
+    /// bars filling the rest, or is stretched to fill it. Stretching is the
+    /// default because it is usually what is wanted: a PAL picture is 720x576
+    /// in pixels but 4:3 on screen, and stretching it to 4:3 puts that right.
+    var keepsProportions: Bool = false
+
+    /// The sizes offered in the menu.
+    static let presetSizes: [NCResolution] = [
+        NCResolution(width: 1920, height: 1080),
+        NCResolution(width: 2048, height: 1536),
+    ]
+}
+
 // MARK: - Profile
 
 /// Everything that decides what the picture is, for one source.
@@ -93,6 +124,8 @@ struct NCProfile: Equatable {
     var isUpsideDown: Bool = false
     var position: Int = 0
 
+    var recording: NCRecordingOptions = NCRecordingOptions()
+
     init(name: String) {
         self.name = name
     }
@@ -112,6 +145,10 @@ struct NCProfile: Equatable {
         static let mirrored = "mirrored"
         static let upsideDown = "upsideDown"
         static let position = "position"
+        static let recordingWidth = "recordingWidth"
+        static let recordingHeight = "recordingHeight"
+        static let recordingSharp = "recordingSharp"
+        static let recordingKeepsProportions = "recordingKeepsProportions"
     }
 
     /// Reads a profile back, forgivingly: anything missing or of the wrong type
@@ -151,6 +188,14 @@ struct NCProfile: Equatable {
         isMirrored = values(Key.mirrored) as? Bool ?? false
         isUpsideDown = values(Key.upsideDown) as? Bool ?? false
         position = values(Key.position) as? Int ?? 0
+        if let width = values(Key.recordingWidth) as? Int,
+            let height = values(Key.recordingHeight) as? Int,
+            width > 0, height > 0
+        {
+            recording.size = NCResolution(width: width, height: height)
+        }
+        recording.isSharp = values(Key.recordingSharp) as? Bool ?? false
+        recording.keepsProportions = values(Key.recordingKeepsProportions) as? Bool ?? false
     }
 
     var dictionary: [String: Any] {
@@ -164,7 +209,13 @@ struct NCProfile: Equatable {
             Key.mirrored: isMirrored,
             Key.upsideDown: isUpsideDown,
             Key.position: position,
+            Key.recordingSharp: recording.isSharp,
+            Key.recordingKeepsProportions: recording.keepsProportions,
         ]
+        if let size = recording.size {
+            result[Key.recordingWidth] = size.width
+            result[Key.recordingHeight] = size.height
+        }
         if let resolution {
             result[Key.resolutionWidth] = resolution.width
             result[Key.resolutionHeight] = resolution.height

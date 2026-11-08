@@ -87,6 +87,16 @@ Two projects, two different bargains. Neither is a criticism of the other.
   app starts with the profile it was last using. The window's size, position,
   border and aspect-ratio lock are the app's, the same in every profile.
 
+- **Recording.** *Camera › Start Recording…* (⇧⌘R) asks where to save, then
+  records the picture — cropped, turned and mirrored — to a QuickTime movie until
+  it is stopped, with the lamp at the right of the title bar turning red meanwhile. *Recording Options*,
+  kept in the profile, can scale the recording to 1920x1080 or 2048x1536, smoothly
+  or sharply, stretched or with its proportions kept: a video site that receives a
+  large picture leaves its pixels alone, and stretching a PAL picture to 4:3 puts
+  its proportions right. Whatever would change the picture's size is greyed out
+  while a recording runs; if it changes size anyway, the recording ends there and
+  keeps what it has. There is no sound yet.
+
 Beyond that, this is Quick Camera's behaviour, unchanged.
 
 ## Building

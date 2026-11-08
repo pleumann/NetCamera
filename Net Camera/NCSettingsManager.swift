@@ -52,6 +52,12 @@ class NCSettingsManager {
         profiles.updateActive { $0.crop = value }
     }
 
+    var recording: NCRecordingOptions { profile.recording }
+
+    func setRecording(_ value: NCRecordingOptions) {
+        profiles.updateActive { $0.recording = value }
+    }
+
     /// The camera, and the resolution it runs at, together: a resolution only
     /// means something for the camera it was chosen on.
     func setCamera(_ name: String, resolution: NCResolution?) {

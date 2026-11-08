@@ -18,8 +18,9 @@ extension NCAppDelegate {
     /// Puts the Profile menu into the menu bar, after Camera.
     func installProfileMenu() {
         guard let mainMenu = NSApp.mainMenu else { return }
+        // Items are enabled by validateMenuItem(_:), which knows about the last
+        // profile and about recordings.
         let menu = NSMenu(title: "Profile")
-        menu.autoenablesItems = false
         let item = NSMenuItem(title: "Profile", action: nil, keyEquivalent: "")
         item.submenu = menu
 
@@ -38,9 +39,7 @@ extension NCAppDelegate {
         menu.addItem(item("New Profile…", #selector(newProfile(_:))))
         menu.addItem(item("Duplicate Profile…", #selector(duplicateProfile(_:))))
         menu.addItem(item("Rename Profile…", #selector(renameProfile(_:))))
-        let remove = item("Remove Profile…", #selector(removeProfile(_:)))
-        remove.isEnabled = store.profiles.count > 1
-        menu.addItem(remove)
+        menu.addItem(item("Remove Profile…", #selector(removeProfile(_:))))
         menu.addItem(.separator())
 
         for (index, profile) in store.profiles.enumerated() {
@@ -145,6 +144,17 @@ extension NCAppDelegate {
         let previous = store.active
         guard store.activate(index) else { return }
         profileChanged(from: previous)
+    }
+
+    // MARK: - Validation
+
+    /// Greys out what cannot be done now: removing the only profile, and
+    /// anything a recording in progress rules out.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(removeProfile(_:)) && store.profiles.count < 2 {
+            return false
+        }
+        return isAllowedWhileRecording(menuItem.action)
     }
 
     // MARK: - Switching
