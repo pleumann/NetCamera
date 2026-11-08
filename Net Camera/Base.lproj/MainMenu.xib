@@ -104,6 +104,12 @@
                                     </items>
                                 </menu>
                             </menuItem>
+                            <menuItem title="Crop…" id="cRp-Pa-nL1">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="showCropPanel:" target="-1" id="cRp-Ac-tN1"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Save Image" keyEquivalent="s" id="iBa-Au-CgF">
                                 <connections>
                                     <action selector="saveImage:" target="494" id="2e0-wH-zXa"/>

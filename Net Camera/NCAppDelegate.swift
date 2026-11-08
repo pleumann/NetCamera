@@ -90,29 +90,33 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// which is what makes the browser and the window show the same thing.
     let mjpegSink: NCMJPEGSink = NCMJPEGSink()
 
-    /// The orientation given to every frame. Menu actions write it on the main
-    /// thread and the capture queue reads it once per frame, so it is guarded
-    /// by a lock. It is also a value copied out of the settings rather than a
-    /// look at them: the settings and the menus belong to the main thread, and
-    /// this is the only application state the capture queue ever sees.
-    private let orientationLock: NSLock = NSLock()
+    /// The crop and orientation given to every frame. Menu actions write them
+    /// on the main thread and the capture queue reads them once per frame, so
+    /// they are guarded by a lock, and written and read together so a frame
+    /// never gets the new crop with the old orientation. They are values copied
+    /// out of the settings rather than a look at them: the settings and the
+    /// menus belong to the main thread, and this is the only application state
+    /// the capture queue ever sees.
+    private let geometryLock: NSLock = NSLock()
     private var frameOrientation: NCFrameOrientation = NCFrameOrientation(
         position: 0, isMirrored: false, isUpsideDown: false)
+    private var frameCrop: NCFrameCrop = .none
 
     /// Whether the current run of dropped frames has already been traced.
     /// Capture queue only.
     private var frameDropReported: Bool = false
 
-    private func publish(_ orientation: NCFrameOrientation) {
-        orientationLock.lock()
-        defer { orientationLock.unlock() }
+    private func publish(_ orientation: NCFrameOrientation, crop: NCFrameCrop) {
+        geometryLock.lock()
+        defer { geometryLock.unlock() }
         frameOrientation = orientation
+        frameCrop = crop
     }
 
-    private var currentFrameOrientation: NCFrameOrientation {
-        orientationLock.lock()
-        defer { orientationLock.unlock() }
-        return frameOrientation
+    private var currentFrameGeometry: (orientation: NCFrameOrientation, crop: NCFrameCrop) {
+        geometryLock.lock()
+        defer { geometryLock.unlock() }
+        return (frameOrientation, frameCrop)
     }
 
     // MARK: - Error Handling
@@ -569,12 +573,14 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         NCSettingsManager.shared.logSettings(label: "applySettings")
 
         // The three settings that decide which way round the picture is, handed
-        // to the pipeline as one value. Every consumer sees the same geometry
-        // because they all read the same processed frame.
+        // to the pipeline as one value, with the margins cut off it. Every
+        // consumer sees the same geometry because they all read the same
+        // processed frame.
         self.publish(
             NCFrameOrientation(
                 position: self.position, isMirrored: self.isMirrored,
-                isUpsideDown: self.isUpsideDown))
+                isUpsideDown: self.isUpsideDown),
+            crop: NCSettingsManager.shared.crop)
         self.fixAspectRatio()
 
         self.borderlessMenu.state = convertToNSControlStateValue(
@@ -693,9 +699,9 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// lock to, so the window is left free to be any size — the setting is
     /// remembered and applied again as soon as a camera starts.
     func fixAspectRatio() {
-        if isAspectRatioFixed, let device: AVCaptureDevice = self.activeCaptureDevice {
-            let height: Int32 = device.activeFormat.formatDescription.dimensions.height
-            let width: Int32 = device.activeFormat.formatDescription.dimensions.width
+        if isAspectRatioFixed, let picture = self.croppedPictureSize {
+            let height: Int32 = Int32(picture.height)
+            let width: Int32 = Int32(picture.width)
             let size: NSSize =
                 self.isLandscape()
                 ? NSMakeSize(CGFloat(width), CGFloat(height))
@@ -720,13 +726,53 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
     @IBAction func fitToActualSize(_ sender: NSMenuItem) {
         // Nothing to fit to while there is no picture.
-        guard let device: AVCaptureDevice = self.activeCaptureDevice else { return }
-        let height: Int32 = device.activeFormat.formatDescription.dimensions.height
-        let width: Int32 = device.activeFormat.formatDescription.dimensions.width
+        guard let picture = self.croppedPictureSize else { return }
         var currentSize: CGSize = self.window.contentLayoutRect.size
-        currentSize.width = CGFloat(self.isLandscape() ? width : height)
-        currentSize.height = CGFloat(self.isLandscape() ? height : width)
+        currentSize.width = CGFloat(self.isLandscape() ? picture.width : picture.height)
+        currentSize.height = CGFloat(self.isLandscape() ? picture.height : picture.width)
         self.window.setContentSize(currentSize)
+    }
+
+    // MARK: - Cropping
+
+    /// The camera's picture size, before cropping and orientation, or nil
+    /// while there is no camera.
+    private var sourcePictureSize: (width: Int, height: Int)? {
+        guard let device: AVCaptureDevice = self.activeCaptureDevice else { return nil }
+        let dimensions = device.activeFormat.formatDescription.dimensions
+        return (Int(dimensions.width), Int(dimensions.height))
+    }
+
+    /// The picture size once cropped, still before orientation: the shape the
+    /// window locks to and fits to, because it is the shape the frames have.
+    private var croppedPictureSize: (width: Int, height: Int)? {
+        guard let source = self.sourcePictureSize else { return nil }
+        return NCSettingsManager.shared.crop.keptSize(width: source.width, height: source.height)
+    }
+
+    /// The crop dialog while it is open, so a second Crop… brings it forward
+    /// rather than opening another.
+    private var cropPanel: NCCropPanel?
+
+    @IBAction func showCropPanel(_ sender: NSMenuItem) {
+        if let cropPanel {
+            cropPanel.show(beside: self.window)
+            return
+        }
+        let panel = NCCropPanel(
+            crop: NCSettingsManager.shared.crop,
+            sourceSize: self.sourcePictureSize,
+            onChange: { [weak self] crop in
+                NSLog("Crop is now t:%d l:%d b:%d r:%d", crop.top, crop.left, crop.bottom, crop.right)
+                NCSettingsManager.shared.setCrop(crop)
+                // Republishes the geometry and relocks the window to the new shape.
+                self?.applySettings()
+            },
+            onFinish: { [weak self] in
+                self?.cropPanel = nil
+            })
+        self.cropPanel = panel
+        panel.show(beside: self.window)
     }
 
     // MARK: - Saving Stills
@@ -799,9 +845,10 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     }
 
     // MARK: - Frame Tap
-    /// Every frame the camera produces, oriented and handed to the sinks.
+    /// Every frame the camera produces, cropped, oriented and handed to the
+    /// sinks.
     ///
-    /// Runs on the capture queue. It reads the guarded orientation and nothing
+    /// Runs on the capture queue. It reads the guarded geometry and nothing
     /// else of the application's: no menus, no settings, no window.
     func captureOutput(
         _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
@@ -812,9 +859,10 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             return
         }
 
+        let geometry = self.currentFrameGeometry
         guard
             let processed: CVPixelBuffer = self.frameTransform.apply(
-                self.currentFrameOrientation, to: source)
+                geometry.orientation, cropping: geometry.crop, to: source)
         else {
             reportFrameDropped(reason: "no buffer was vended for the oriented frame")
             return

@@ -1,6 +1,33 @@
 import CoreVideo
 import XCTest
 
+// MARK: - The crop model
+
+final class NCFrameCropTests: XCTestCase {
+    /// A value read back from UserDefaults may be anything; negative margins
+    /// become zero rather than growing the picture.
+    func testNegativeMarginsNormaliseToZero() {
+        XCTAssertEqual(NCFrameCrop(top: -1, left: -20, bottom: 3, right: -4),
+                       NCFrameCrop(top: 0, left: 0, bottom: 3, right: 0))
+    }
+
+    /// Core Image's y runs upwards, so the kept rectangle starts at the bottom
+    /// margin, not the top one.
+    func testKeptRectIsInCoreImageSpace() {
+        let crop = NCFrameCrop(top: 10, left: 16, bottom: 4, right: 2)
+        XCTAssertEqual(
+            crop.keptRect(width: 720, height: 576),
+            CGRect(x: 16, y: 4, width: 702, height: 562))
+    }
+
+    func testKeptSizeFallsBackToTheWholePictureWhenNothingIsLeft() {
+        let crop = NCFrameCrop(top: 0, left: 400, bottom: 0, right: 320)
+        XCTAssertNil(crop.keptRect(width: 720, height: 576))
+        XCTAssertTrue(crop.keptSize(width: 720, height: 576) == (720, 576))
+        XCTAssertTrue(NCFrameCrop.none.keptSize(width: 720, height: 576) == (720, 576))
+    }
+}
+
 // MARK: - The orientation mapping
 
 /// The settings-to-geometry mapping, asserted against a table written out by
@@ -285,6 +312,119 @@ final class NCFrameTransformTests: XCTestCase {
             XCTAssertEqual(
                 CVPixelBufferGetWidth(result), turned ? sourceHeight : sourceWidth,
                 "position \(position)")
+        }
+    }
+
+    // MARK: - Cropping
+
+    /// A crop with a different margin on every side, over a picture large
+    /// enough that each margin leaves something, so a top mistaken for a
+    /// bottom or a left for a right cannot pass. Four rows at most, because
+    /// the synthesised colours run out of a byte beyond that.
+    private let cropWidth = 7
+    private let cropHeight = 4
+    private let asymmetricCrop = NCFrameCrop(top: 1, left: 2, bottom: 0, right: 3)
+
+    /// Without any orientation, cropping keeps exactly the pixels inside the
+    /// margins, measured from the top-left as the picture is displayed.
+    func testCropKeepsExactlyThePixelsInsideTheMargins() throws {
+        let transform = NCFrameTransform()
+        let source = try makePixelBuffer(width: cropWidth, height: cropHeight)
+        let upright = NCFrameOrientation(position: 0, isMirrored: false, isUpsideDown: false)
+
+        let result = try XCTUnwrap(transform.apply(upright, cropping: asymmetricCrop, to: source))
+
+        let keptWidth = cropWidth - asymmetricCrop.left - asymmetricCrop.right
+        let keptHeight = cropHeight - asymmetricCrop.top - asymmetricCrop.bottom
+        XCTAssertEqual(CVPixelBufferGetWidth(result), keptWidth)
+        XCTAssertEqual(CVPixelBufferGetHeight(result), keptHeight)
+        for row in 0..<keptHeight {
+            for column in 0..<keptWidth {
+                XCTAssertEqual(
+                    readPixel(result, column: column, row: row),
+                    expectedPixel(
+                        column: column + asymmetricCrop.left, row: row + asymmetricCrop.top),
+                    "kept pixel (\(column), \(row))")
+            }
+        }
+    }
+
+    /// The crop is taken in the camera's own space, before mirroring and
+    /// turning: for every orientation, the result is the cropped picture moved
+    /// exactly as the uncropped one would have been.
+    func testCropIsTakenBeforeEveryOrientation() throws {
+        let transform = NCFrameTransform()
+        let keptWidth = cropWidth - asymmetricCrop.left - asymmetricCrop.right
+        let keptHeight = cropHeight - asymmetricCrop.top - asymmetricCrop.bottom
+
+        for position in 0...3 {
+            for isMirrored in [false, true] {
+                let orientation = NCFrameOrientation(
+                    position: position, isMirrored: isMirrored, isUpsideDown: false)
+                let label = "position \(position), mirrored \(isMirrored)"
+                let source = try makePixelBuffer(width: cropWidth, height: cropHeight)
+
+                let result = try XCTUnwrap(
+                    transform.apply(orientation, cropping: asymmetricCrop, to: source), label)
+
+                let turned = orientation.quarterTurnsClockwise % 2 == 1
+                XCTAssertEqual(
+                    CVPixelBufferGetWidth(result), turned ? keptHeight : keptWidth, label)
+                XCTAssertEqual(
+                    CVPixelBufferGetHeight(result), turned ? keptWidth : keptHeight, label)
+
+                for row in 0..<keptHeight {
+                    for column in 0..<keptWidth {
+                        let place = expectedDestination(
+                            ofColumn: column, row: row,
+                            width: keptWidth, height: keptHeight,
+                            orientation: orientation)
+                        XCTAssertEqual(
+                            readPixel(result, column: place.column, row: place.row),
+                            expectedPixel(
+                                column: column + asymmetricCrop.left,
+                                row: row + asymmetricCrop.top),
+                            "kept pixel (\(column), \(row)) under \(label)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Margins that would leave nothing are not applied: the picture stays
+    /// whole rather than disappearing.
+    func testACropThatLeavesNothingIsNotApplied() throws {
+        let transform = NCFrameTransform()
+        let upright = NCFrameOrientation(position: 0, isMirrored: false, isUpsideDown: false)
+
+        for crop in [
+            NCFrameCrop(top: 0, left: 4, bottom: 0, right: 3),
+            NCFrameCrop(top: 4, left: 0, bottom: 0, right: 0),
+        ] {
+            let source = try makePixelBuffer(width: cropWidth, height: cropHeight)
+            let result = try XCTUnwrap(transform.apply(upright, cropping: crop, to: source))
+            XCTAssertEqual(CVPixelBufferGetWidth(result), cropWidth, "\(crop)")
+            XCTAssertEqual(CVPixelBufferGetHeight(result), cropHeight, "\(crop)")
+            XCTAssertEqual(
+                readPixel(result, column: 0, row: 0), expectedPixel(column: 0, row: 0),
+                "\(crop)")
+        }
+    }
+
+    /// Changing the crop changes the output's size, which rebuilds the pool;
+    /// going back and forth must keep producing frames of the right size.
+    func testChangingTheCropKeepsWorking() throws {
+        let transform = NCFrameTransform()
+        let upright = NCFrameOrientation(position: 0, isMirrored: false, isUpsideDown: false)
+
+        for crop in [asymmetricCrop, .none, NCFrameCrop(top: 1, left: 0, bottom: 1, right: 0),
+                     asymmetricCrop]
+        {
+            let source = try makePixelBuffer(width: cropWidth, height: cropHeight)
+            let result = try XCTUnwrap(transform.apply(upright, cropping: crop, to: source))
+            let kept = crop.keptSize(width: cropWidth, height: cropHeight)
+            XCTAssertEqual(CVPixelBufferGetWidth(result), kept.width, "\(crop)")
+            XCTAssertEqual(CVPixelBufferGetHeight(result), kept.height, "\(crop)")
         }
     }
 

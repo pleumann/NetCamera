@@ -69,6 +69,12 @@ Two projects, two different bargains. Neither is a criticism of the other.
   without a plugin, a player or a handshake. With nobody watching, the encoder
   does not run at all; with several watching, a frame is still encoded only once.
 
+- **Cropping.** *Camera › Crop…* cuts a margin off any edge of the picture, in the
+  camera's own pixels — for the black strip a capture dongle delivers down one side.
+  The crop is taken before mirroring and rotation, so it stays on the same edge of
+  the signal whichever way round the picture is shown, and the window, saved images
+  and the web stream all get the same cropped picture.
+
 Beyond that, this is Quick Camera's behaviour, unchanged.
 
 ## Building
