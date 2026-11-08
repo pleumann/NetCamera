@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E1C4A70A2E93B41100D51C48 /* NCProfileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C47 /* NCProfileStoreTests.swift */; };
+		E1C4A70A2E93B41100D51C46 /* NCAppDelegate+Profiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C45 /* NCAppDelegate+Profiles.swift */; };
+		E1C4A70A2E93B41100D51C44 /* NCProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C42 /* NCProfile.swift */; };
+		E1C4A70A2E93B41100D51C43 /* NCProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C42 /* NCProfile.swift */; };
 		E1C4A70A2E93B41100D51C41 /* NCCropPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C40 /* NCCropPanel.swift */; };
 		87673A631E35C97A002ECF15 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 87673A621E35C97A002ECF15 /* AVFoundation.framework */; };
 		87FF95021E355CDB0017DADB /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 87FF95011E355CDB0017DADB /* AVKit.framework */; };
@@ -39,6 +43,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E1C4A70A2E93B41100D51C47 /* NCProfileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCProfileStoreTests.swift; sourceTree = "<group>"; };
+		E1C4A70A2E93B41100D51C45 /* NCAppDelegate+Profiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NCAppDelegate+Profiles.swift"; sourceTree = "<group>"; };
+		E1C4A70A2E93B41100D51C42 /* NCProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCProfile.swift; sourceTree = "<group>"; };
 		E1C4A70A2E93B41100D51C40 /* NCCropPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCCropPanel.swift; sourceTree = "<group>"; };
 		87673A621E35C97A002ECF15 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		87FF95011E355CDB0017DADB /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
@@ -99,6 +106,7 @@
 				E1C4A70A2E93B41100D51C33 /* NCCameraAvailabilityTests.swift */,
 				E1C4A70A2E93B41100D51C15 /* NCFrameDistributorTests.swift */,
 				E1C4A70A2E93B41100D51C04 /* NCFrameTransformTests.swift */,
+				E1C4A70A2E93B41100D51C47 /* NCProfileStoreTests.swift */,
 				E1C4A70A2E93B41100D51C0E /* NCHarnessTests.swift */,
 				E1C4A70A2E93B41100D51C26 /* NCMJPEGSinkTests.swift */,
 				E1C4A70A2E93B41100D51C1A /* NCStillCaptureTests.swift */,
@@ -151,6 +159,8 @@
 			isa = PBXGroup;
 			children = (
 				E1C4A70A2E93B41100D51C30 /* NCCameraAvailability.swift */,
+				E1C4A70A2E93B41100D51C45 /* NCAppDelegate+Profiles.swift */,
+				E1C4A70A2E93B41100D51C42 /* NCProfile.swift */,
 				E1C4A70A2E93B41100D51C40 /* NCCropPanel.swift */,
 				E1C4A70A2E93B41100D51C13 /* NCDisplaySink.swift */,
 				E1C4A70A2E93B41100D51C10 /* NCFrameDistributor.swift */,
@@ -279,6 +289,8 @@
 				E1C4A70A2E93B41100D51C1B /* NCStillCaptureTests.swift in Sources */,
 				E1C4A70A2E93B41100D51C25 /* NCMJPEGSink.swift in Sources */,
 				E1C4A70A2E93B41100D51C27 /* NCMJPEGSinkTests.swift in Sources */,
+				E1C4A70A2E93B41100D51C48 /* NCProfileStoreTests.swift in Sources */,
+				E1C4A70A2E93B41100D51C44 /* NCProfile.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -296,6 +308,8 @@
 				E1C4A70A2E93B41100D51C18 /* NCStillCapture.swift in Sources */,
 				E1C4A70A2E93B41100D51C1D /* NCHTTPServer.swift in Sources */,
 				E1C4A70A2E93B41100D51C24 /* NCMJPEGSink.swift in Sources */,
+				E1C4A70A2E93B41100D51C46 /* NCAppDelegate+Profiles.swift in Sources */,
+				E1C4A70A2E93B41100D51C43 /* NCProfile.swift in Sources */,
 				E1C4A70A2E93B41100D51C41 /* NCCropPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

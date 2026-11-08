@@ -51,10 +51,6 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         get { NCSettingsManager.shared.isAspectRatioFixed }
         set { NCSettingsManager.shared.setAspectRatioFixed(newValue) }
     }
-    var deviceName: String {
-        get { NCSettingsManager.shared.deviceName }
-        set { NCSettingsManager.shared.setDeviceName(newValue) }
-    }
 
     // MARK: - Window Properties
     var defaultBorderStyle: NSWindow.StyleMask = NSWindow.StyleMask.closable
@@ -366,7 +362,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             deviceMenu.addItem(emptyItem)
         }
 
-        // Fall back to the camera the settings were saved with, or else the first device:
+        // Fall back to the camera the profile names, or else the first device:
         // before capture has started, or once the selected camera has been unplugged, there
         // is no session device to match against. refreshSourceMenuState() settles the real
         // selection once the menu is built, and keeps a camera that is already running.
@@ -393,10 +389,10 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         refreshSourceMenuState()
     }
 
-    /// Where the camera the settings were saved with sits in the device list, if it is
-    /// connected. Matched by name, the only thing the settings keep of it.
-    private var savedDeviceIndex: Int? {
-        let name: String = NCSettingsManager.shared.savedDeviceName
+    /// Where the camera the profile names sits in the device list, if it is connected.
+    /// Matched by name, the only thing the profile keeps of it.
+    var savedDeviceIndex: Int? {
+        let name: String = NCSettingsManager.shared.deviceName
         guard !name.isEmpty else { return nil }
         return self.devices?.firstIndex { $0.localizedName == name }
     }
@@ -518,7 +514,6 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
             self.captureSession.startRunning()
 
-            self.deviceName = device.localizedName
             self.adoptSavedResolution(for: device)
             // Before applySettings, which sizes the window from the format now in force.
             self.applyChosenResolution(to: device)
@@ -557,25 +552,23 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         NCSettingsManager.shared.logSettings(label: label)
     }
 
-    func loadSettings() {
-        NCSettingsManager.shared.loadSettings()
-
+    /// Puts the window back the way it was: borderless if it was, and where it was.
+    ///
+    /// The frame is AppKit's to keep, through frame autosave, which writes it whenever the
+    /// window moves or is resized. A frame kept by the settings from before that is used
+    /// once, the first time there is no autosaved one.
+    func restoreWindow() {
         if self.isBorderless {
             self.removeBorder()
         }
 
-        let savedW = NCSettingsManager.shared.frameWidth
-        let savedH = NCSettingsManager.shared.frameHeight
-        if 100 < savedW && 100 < savedH {
-            let savedX = NCSettingsManager.shared.frameX
-            let savedY = NCSettingsManager.shared.frameY
-            NSLog("loaded : x:%f,y:%f,w:%f,h:%f", savedX, savedY, savedW, savedH)
-            var currentSize: CGSize = self.window.contentLayoutRect.size
-            currentSize.width = CGFloat(savedW)
-            currentSize.height = CGFloat(savedH)
-            self.window.setContentSize(currentSize)
-            self.window.setFrameOrigin(NSPoint(x: CGFloat(savedX), y: CGFloat(savedY)))
+        let name: String = NCSettingsManager.windowFrameAutosaveName
+        let legacyFrame: NSRect? = NCSettingsManager.shared.takeLegacyWindowFrame()
+        if !self.window.setFrameUsingName(name), let legacyFrame {
+            NSLog("Window frame taken over from the old settings: %@", NSStringFromRect(legacyFrame))
+            self.window.setFrame(legacyFrame, display: false)
         }
+        self.window.setFrameAutosaveName(name)
     }
 
     func applySettings() {
@@ -603,22 +596,17 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
                 ? NSControl.StateValue.on.rawValue : NSControl.StateValue.off.rawValue))
     }
 
-    // MARK: - Settings Actions
-    @IBAction func saveSettings(_ sender: NSMenuItem) {
-        // The resolution belongs with the camera named in the settings, so it is the running
-        // camera's, or none at all when nothing is running.
-        NCSettingsManager.shared.setResolution(self.sourcePictureSize)
-        NCSettingsManager.shared.setFrameProperties(
-            x: Float(self.window.frame.minX),
-            y: Float(self.window.frame.minY),
-            width: Float(self.window.frame.width),
-            height: Float(self.window.frame.height)
-        )
-        NCSettingsManager.shared.saveSettings()
-    }
-
-    @IBAction func clearSettings(_ sender: NSMenuItem) {
-        NCSettingsManager.shared.clearSettings()
+    /// Writes the running camera and its resolution into the profile in use.
+    ///
+    /// Called only when the user has chosen a camera or a resolution, never when capture
+    /// starts by itself: a profile whose camera is not plugged in falls back to another one
+    /// for the moment, and must not be rewritten to name that other camera for good.
+    private func recordRunningCameraInProfile() {
+        guard let device: AVCaptureDevice = self.activeCaptureDevice,
+            let size = self.sourcePictureSize
+        else { return }
+        NCSettingsManager.shared.setCamera(
+            device.localizedName, resolution: NCResolution(width: size.width, height: size.height))
     }
 
     // MARK: - Display Actions
@@ -764,7 +752,10 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
     /// The crop dialog while it is open, so a second Crop… brings it forward
     /// rather than opening another.
-    private var cropPanel: NCCropPanel?
+    var cropPanel: NCCropPanel?
+
+    /// The Profile menu, built in code because its lower half is the list of profiles.
+    var profileMenu: NSMenu?
 
     @IBAction func showCropPanel(_ sender: NSMenuItem) {
         if let cropPanel {
@@ -854,6 +845,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
         self.startCaptureWithVideoDevice(defaultDevice: deviceIndex)
         self.refreshSourceMenuState()
+        self.recordRunningCameraInProfile()
     }
 
     // MARK: - Frame Tap
@@ -922,10 +914,11 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             self?.errorMessage(message: failure.message)
         }
 
-        // Settings belong to the window and the picture's orientation, neither
-        // of which needs a camera to exist, so they are read before anything is
-        // known about one and survive a launch that finds no camera at all.
-        self.loadSettings()
+        // Settings belong to the window and the profile, neither of which needs
+        // a camera to exist, so they are read before anything is known about
+        // one and survive a launch that finds no camera at all.
+        self.restoreWindow()
+        self.installProfileMenu()
 
         // Listening before asking, so a camera plugged in while the permission
         // prompt is still on screen is not missed.
@@ -981,19 +974,20 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         // that applySettings does — so relock the window to the shape now being captured.
         self.fixAspectRatio()
         self.refreshSourceMenuState()
+        self.recordRunningCameraInProfile()
     }
 
-    /// Takes the saved resolution as the choice for the camera it was saved with, the first
-    /// time that camera starts.
+    /// Takes the profile's resolution as the choice for the camera it names.
     ///
-    /// Only when nothing has been chosen for the camera yet, so a resolution picked from the
-    /// menu since launch is never overridden by the saved one. The saved dimensions are
-    /// matched the way the menu matches them: the first format of that size stands for it.
-    /// A camera that no longer offers the size simply starts at its own default.
-    func adoptSavedResolution(for device: AVCaptureDevice) {
-        guard self.chosenFormatIndex[device.uniqueID] == nil,
-            device.localizedName == NCSettingsManager.shared.savedDeviceName,
-            let saved = NCSettingsManager.shared.resolution
+    /// At a camera's first start, only when nothing has been chosen for it yet, so a
+    /// resolution picked from the menu since launch is never overridden. `overriding` is for
+    /// switching profiles, when the profile's resolution is exactly what was asked for. The
+    /// dimensions are matched the way the menu matches them: the first format of that size
+    /// stands for it. A camera that no longer offers the size keeps the format it has.
+    func adoptSavedResolution(for device: AVCaptureDevice, overriding: Bool = false) {
+        guard overriding || self.chosenFormatIndex[device.uniqueID] == nil,
+            device.localizedName == NCSettingsManager.shared.deviceName,
+            let saved: NCResolution = NCSettingsManager.shared.resolution
         else { return }
 
         guard
@@ -1003,7 +997,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             })
         else {
             NSLog(
-                "%@ no longer offers the saved %dx%d; leaving it at its default",
+                "%@ no longer offers the saved %dx%d; leaving it as it is",
                 device.localizedName, saved.width, saved.height)
             return
         }

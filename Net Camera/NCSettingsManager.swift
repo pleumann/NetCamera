@@ -1,162 +1,145 @@
 import AVFoundation
 import Cocoa
 
+/// The app's settings, every one of them written to disk as it changes.
+///
+/// The picture's settings — camera, resolution, crop, mirroring, rotation —
+/// belong to the profile in use, and are read from and written to it here so
+/// that nothing else has to know profiles exist. The window's settings —
+/// borderless mode and the aspect-ratio lock — are the app's, the same
+/// whichever profile is in use. The window's frame is left to AppKit's own
+/// frame autosave.
 class NCSettingsManager {
-    // MARK: - Properties
-    private(set) var isMirrored: Bool = false
-    private(set) var isUpsideDown: Bool = false
-    private(set) var isBorderless: Bool = false
-    private(set) var isAspectRatioFixed: Bool = false
-    private(set) var position: Int = 0
-    private(set) var deviceName: String = "-"
-    private(set) var savedDeviceName: String = "-"
+    // MARK: - Keys
 
-    /// The margins cut off the camera's picture. One set for every camera for
-    /// now; different sources wanting different margins is what profiles are
-    /// for, later.
-    private(set) var crop: NCFrameCrop = .none
-
-    /// The capture resolution of the camera named by `deviceName`, as it was
-    /// when the settings were saved. Held as dimensions rather than as an index
-    /// into the camera's formats, whose order is the driver's to change.
-    /// `nil` when none has been saved.
-    private(set) var resolution: (width: Int, height: Int)?
-
-    // MARK: - Frame Properties
-    private(set) var frameX: Float = 100
-    private(set) var frameY: Float = 100
-    private(set) var frameWidth: Float = 0
-    private(set) var frameHeight: Float = 0
-
-    // MARK: - Singleton
-    static let shared: NCSettingsManager = NCSettingsManager()
-
-    private init() {
-        loadSettings()
+    private enum Key {
+        static let borderless = "borderless"
+        static let aspectRatioFixed = "aspectRatioFixed"
     }
 
-    // MARK: - Property Setters
+    // MARK: - Profiles
+
+    private(set) var profiles: NCProfileStore
+
+    private var profile: NCProfile { profiles.active }
+
+    // MARK: - Picture settings, from the profile in use
+
+    var isMirrored: Bool { profile.isMirrored }
+    var isUpsideDown: Bool { profile.isUpsideDown }
+    var position: Int { profile.position }
+    var crop: NCFrameCrop { profile.crop }
+
+    /// The camera the profile names, or empty when it names none.
+    var deviceName: String { profile.deviceName }
+
+    /// The capture resolution for `deviceName`, or `nil` for the camera's own.
+    var resolution: NCResolution? { profile.resolution }
+
     func setMirrored(_ value: Bool) {
-        isMirrored = value
+        profiles.updateActive { $0.isMirrored = value }
     }
 
     func setUpsideDown(_ value: Bool) {
-        isUpsideDown = value
+        profiles.updateActive { $0.isUpsideDown = value }
     }
+
+    func setPosition(_ value: Int) {
+        profiles.updateActive { $0.position = value }
+    }
+
+    func setCrop(_ value: NCFrameCrop) {
+        profiles.updateActive { $0.crop = value }
+    }
+
+    /// The camera, and the resolution it runs at, together: a resolution only
+    /// means something for the camera it was chosen on.
+    func setCamera(_ name: String, resolution: NCResolution?) {
+        profiles.updateActive {
+            $0.deviceName = name
+            $0.resolution = resolution
+        }
+    }
+
+    // MARK: - Window settings, the app's
+
+    private(set) var isBorderless: Bool
+    private(set) var isAspectRatioFixed: Bool
 
     func setBorderless(_ value: Bool) {
         isBorderless = value
+        UserDefaults.standard.set(value, forKey: Key.borderless)
     }
 
     func setAspectRatioFixed(_ value: Bool) {
         isAspectRatioFixed = value
+        UserDefaults.standard.set(value, forKey: Key.aspectRatioFixed)
     }
 
-    func setPosition(_ value: Int) {
-        position = value
+    // MARK: - Singleton
+
+    static let shared: NCSettingsManager = NCSettingsManager()
+
+    private init() {
+        profiles = NCProfileStore()
+        isBorderless = UserDefaults.standard.bool(forKey: Key.borderless)
+        isAspectRatioFixed = UserDefaults.standard.bool(forKey: Key.aspectRatioFixed)
+        logSettings(label: "loaded")
     }
 
-    func setDeviceName(_ value: String) {
-        deviceName = value
-    }
+    // MARK: - Clearing
 
-    func setCrop(_ value: NCFrameCrop) {
-        crop = value
-    }
-
-    func setResolution(_ value: (width: Int, height: Int)?) {
-        resolution = value
-    }
-
-    func setFrameProperties(x: Float, y: Float, width: Float, height: Float) {
-        frameX = x
-        frameY = y
-        frameWidth = width
-        frameHeight = height
-    }
-
-    // MARK: - Settings Management
-    func loadSettings() {
-        logSettings(label: "before loadSettings")
-
-        savedDeviceName = UserDefaults.standard.object(forKey: "deviceName") as? String ?? ""
-        isBorderless = UserDefaults.standard.object(forKey: "borderless") as? Bool ?? false
-        isMirrored = UserDefaults.standard.object(forKey: "mirrored") as? Bool ?? false
-        isUpsideDown = UserDefaults.standard.object(forKey: "upsideDown") as? Bool ?? false
-        isAspectRatioFixed =
-            UserDefaults.standard.object(forKey: "aspectRatioFixed") as? Bool ?? false
-        position = UserDefaults.standard.object(forKey: "position") as? Int ?? 0
-        crop = NCFrameCrop(
-            top: UserDefaults.standard.object(forKey: "cropTop") as? Int ?? 0,
-            left: UserDefaults.standard.object(forKey: "cropLeft") as? Int ?? 0,
-            bottom: UserDefaults.standard.object(forKey: "cropBottom") as? Int ?? 0,
-            right: UserDefaults.standard.object(forKey: "cropRight") as? Int ?? 0)
-        if let width = UserDefaults.standard.object(forKey: "resolutionWidth") as? Int,
-            let height = UserDefaults.standard.object(forKey: "resolutionHeight") as? Int,
-            width > 0, height > 0
-        {
-            resolution = (width, height)
-        } else {
-            resolution = nil
+    /// Deletes every setting the app has written, every profile included, and
+    /// starts again from the defaults.
+    ///
+    /// What is held in memory is replaced as well as what is on disk. With
+    /// every change written through, a store left holding the old profiles
+    /// would write them all straight back at the next change.
+    func clearAll() {
+        if let domain = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: domain)
         }
-
-        frameWidth = UserDefaults.standard.object(forKey: "frameW") as? Float ?? 0
-        frameHeight = UserDefaults.standard.object(forKey: "frameH") as? Float ?? 0
-        if 100 < frameWidth && 100 < frameHeight {
-            frameX = UserDefaults.standard.object(forKey: "frameX") as? Float ?? 100
-            frameY = UserDefaults.standard.object(forKey: "frameY") as? Float ?? 100
-            NSLog("loaded : x:%f,y:%f,w:%f,h:%f", frameX, frameY, frameWidth, frameHeight)
-        }
-
-        logSettings(label: "after loadSettings")
+        profiles = NCProfileStore()
+        isBorderless = false
+        isAspectRatioFixed = false
+        logSettings(label: "cleared")
     }
 
-    func saveSettings() {
-        logSettings(label: "saveSettings")
-        // What is on disk is what a hot-plug falls back to from now on, not only after a
-        // relaunch.
-        savedDeviceName = deviceName
-        UserDefaults.standard.set(deviceName, forKey: "deviceName")
-        UserDefaults.standard.set(isBorderless, forKey: "borderless")
-        UserDefaults.standard.set(isMirrored, forKey: "mirrored")
-        UserDefaults.standard.set(isUpsideDown, forKey: "upsideDown")
-        UserDefaults.standard.set(isAspectRatioFixed, forKey: "aspectRatioFixed")
-        UserDefaults.standard.set(position, forKey: "position")
-        UserDefaults.standard.set(crop.top, forKey: "cropTop")
-        UserDefaults.standard.set(crop.left, forKey: "cropLeft")
-        UserDefaults.standard.set(crop.bottom, forKey: "cropBottom")
-        UserDefaults.standard.set(crop.right, forKey: "cropRight")
-        if let resolution {
-            UserDefaults.standard.set(resolution.width, forKey: "resolutionWidth")
-            UserDefaults.standard.set(resolution.height, forKey: "resolutionHeight")
-        } else {
-            UserDefaults.standard.removeObject(forKey: "resolutionWidth")
-            UserDefaults.standard.removeObject(forKey: "resolutionHeight")
-        }
-        UserDefaults.standard.set(frameX, forKey: "frameX")
-        UserDefaults.standard.set(frameY, forKey: "frameY")
-        UserDefaults.standard.set(frameWidth, forKey: "frameW")
-        UserDefaults.standard.set(frameHeight, forKey: "frameH")
+    // MARK: - Window frame
+
+    /// The name AppKit keeps the window's frame under.
+    static let windowFrameAutosaveName = "NetCameraWindow"
+
+    /// The window's frame as the settings kept it before AppKit's autosave
+    /// took over, once only: it is read, handed back and removed, so the first
+    /// launch after the change opens the window where it was and AppKit keeps
+    /// it from then on. `nil` when there is nothing usable to hand back.
+    func takeLegacyWindowFrame() -> NSRect? {
+        let defaults = UserDefaults.standard
+        let keys = ["frameX", "frameY", "frameW", "frameH"]
+        defer { keys.forEach(defaults.removeObject(forKey:)) }
+        let width = defaults.float(forKey: "frameW")
+        let height = defaults.float(forKey: "frameH")
+        guard width > 100, height > 100 else { return nil }
+        return NSRect(
+            x: CGFloat(defaults.float(forKey: "frameX")),
+            y: CGFloat(defaults.float(forKey: "frameY")),
+            width: CGFloat(width), height: CGFloat(height))
     }
 
-    func clearSettings() {
-        if let appDomain = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: appDomain)
-        }
-        loadSettings()  // Reset to defaults
-    }
+    // MARK: - Logging
 
     func logSettings(label: String) {
         NSLog(
-            "%@ : %@,%@,%@borderless,%@mirrored,%@upsideDown,%@aspectRetioFixed,position:%d,"
-                + "crop(t,l,b,r):%d,%d,%d,%d,resolution:%dx%d",
-            label, deviceName, savedDeviceName,
-            isBorderless ? "+" : "-",
+            "%@ : profile %@ of %d, camera '%@' at %dx%d, %@mirrored,%@upsideDown,position:%d,"
+                + "crop(t,l,b,r):%d,%d,%d,%d, %@borderless,%@aspectRatioFixed",
+            label, profile.name, profiles.profiles.count, deviceName,
+            resolution?.width ?? 0, resolution?.height ?? 0,
             isMirrored ? "+" : "-",
             isUpsideDown ? "+" : "-",
-            isAspectRatioFixed ? "+" : "-",
             position,
             crop.top, crop.left, crop.bottom, crop.right,
-            resolution?.width ?? 0, resolution?.height ?? 0)
+            isBorderless ? "+" : "-",
+            isAspectRatioFixed ? "+" : "-")
     }
 }

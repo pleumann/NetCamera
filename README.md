@@ -75,6 +75,14 @@ Two projects, two different bargains. Neither is a criticism of the other.
   the signal whichever way round the picture is shown, and the window, saved images
   and the web stream all get the same cropped picture.
 
+- **Profiles.** The *Profile* menu holds named sets of picture settings — camera,
+  capture resolution, crop, mirroring and rotation — for the different machines
+  that are fed through the same capture device, created, duplicated, renamed and
+  removed from the menu and chosen from the list beneath. Every change is written
+  into the profile in use as it is made, so there is no Save Settings, and the
+  app starts with the profile it was last using. The window's size, position,
+  border and aspect-ratio lock are the app's, the same in every profile.
+
 Beyond that, this is Quick Camera's behaviour, unchanged.
 
 ## Building

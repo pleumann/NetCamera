@@ -137,19 +137,6 @@
                                     <action selector="enterFullScreen:" target="494" id="SVF-ca-TFE"/>
                                 </connections>
                             </menuItem>
-                            <menuItem isSeparatorItem="YES" id="YuD-fh-x4O"/>
-                            <menuItem title="Save Settings" id="fSo-F6-aJo">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="saveSettings:" target="-1" id="5XG-Ua-ecs"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Clear Settings" id="zGQ-Bh-Ak3">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="clearSettings:" target="-1" id="BAn-fb-0kQ"/>
-                                </connections>
-                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="79">
                                 <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                             </menuItem>

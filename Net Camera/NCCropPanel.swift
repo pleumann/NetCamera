@@ -263,6 +263,13 @@ final class NCCropPanel: NSObject, NSWindowDelegate, NSTextFieldDelegate {
         refresh()
     }
 
+    /// Closes the panel keeping the crop as it stands, as OK does. For when the
+    /// crop it was opened on stops being the one in force — a different profile
+    /// taken into use — so that a later Cancel cannot put it back.
+    func dismiss() {
+        finish(with: crop)
+    }
+
     @objc private func cancel(_ sender: Any?) {
         finish(with: original)
     }

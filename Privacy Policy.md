@@ -48,13 +48,14 @@ quits. There is no setting to turn it off while the app is running.
 
 ## Settings
 
-Net Camera remembers your choices between launches: which camera you last
-used, whether the picture is mirrored or flipped, its rotation, the window's
-size and position, and whether the window has a border. These are stored by
-macOS on your Mac, using the standard mechanism apps use for preferences
-(`UserDefaults`). They never leave your Mac and are not shared with the
-developer or anyone else. The app's own "Clear Settings" menu item deletes
-them. Deleting the app itself leaves its settings folder behind in your home
+Net Camera remembers your choices between launches: your profiles, each with
+its camera, capture resolution, crop, mirroring and rotation, which profile
+you last used, the window's size and position, and whether the window has a
+border. These are stored by macOS on your Mac, using the standard mechanism
+apps use for preferences (`UserDefaults`). They never leave your Mac and are
+not shared with the developer or anyone else. The app's own "Clear All
+Settings…" menu item, in the Profile menu, deletes all of them; "Remove
+Profile…" deletes a single profile. Deleting the app itself leaves its settings folder behind in your home
 Library folder until you remove that as well, which is how macOS treats every
 sandboxed app.
 
