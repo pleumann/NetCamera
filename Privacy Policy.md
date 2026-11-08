@@ -18,14 +18,21 @@ the developer, or to anyone else: it can only answer connections made to it
 Nobody, including the developer, receives any information from your use of
 this app.
 
-## The camera picture
+## The camera picture and sound
 
 The camera picture is not recorded, saved automatically, or sent anywhere by
-the app. It exists only as a live video signal, shown in the app's window and,
-while the app is running, on the network stream described below. Saving a
-picture is something you do deliberately: choosing "Save Image" writes one
-frame to a location you pick, using a standard macOS save dialog. The app can
-only write to the file you choose; it has no access to the rest of your disk.
+the app on its own. It exists only as a live video signal, shown in the app's
+window and, while the app is running, on the network stream described below.
+Keeping any of it is something you do deliberately: "Save Image" writes one
+frame to a location you pick, using a standard macOS save dialog; "Copy
+Picture" puts one frame on your clipboard; and "Start Recording…" writes a
+video to a location you pick until you stop it. The app can only write to the
+files you choose; it has no access to the rest of your disk.
+
+Sound is used only if you choose a sound input for it, and is then played
+through your Mac's speakers and, while you record, recorded with the picture.
+It is not part of the network stream, and it is not saved or sent anywhere
+otherwise.
 
 ## The network stream
 
@@ -59,11 +66,13 @@ Profile…" deletes a single profile. Deleting the app itself leaves its setting
 Library folder until you remove that as well, which is how macOS treats every
 sandboxed app.
 
-## Camera access
+## Camera and microphone access
 
 The app can only see a camera after macOS asks you for permission and you
-grant it. You can review or withdraw that permission at any time in System
-Settings, under Privacy & Security > Camera.
+grant it. The same goes for sound inputs, which macOS treats as microphones:
+the app asks only when you first choose one. You can review or withdraw either
+permission at any time in System Settings, under Privacy & Security > Camera
+and Privacy & Security > Microphone.
 
 ## Data retention
 

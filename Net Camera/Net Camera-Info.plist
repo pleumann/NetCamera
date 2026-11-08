@@ -24,6 +24,8 @@
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>${MACOSX_DEPLOYMENT_TARGET}</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Net Camera plays the sound input you choose and records it with the picture when you record a video.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Net Camera requires access to connected USB cameras in order to display the output on your screen.</string>
 	<key>NSHumanReadableCopyright</key>

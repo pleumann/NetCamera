@@ -77,6 +77,10 @@ extension NCAppDelegate: NSMenuDelegate {
     /// opens, so a change of profile shows without anything having to be
     /// told about it.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu.title == "Sound Input" {
+            updateSoundMenu(menu)
+            return
+        }
         guard menu.title == "Recording Options" else { return }
         menu.removeAllItems()
         let options = recordingOptions
@@ -127,6 +131,8 @@ extension NCAppDelegate: NSMenuDelegate {
         #selector(chooseRecordingSize(_:)),
         #selector(chooseRecordingScaling(_:)),
         #selector(toggleKeepProportions(_:)),
+        // A sound track, like a picture, keeps one source throughout.
+        #selector(chooseSoundInput(_:)),
     ]
 
     /// Whether an action may run now. Greys the menu item out and stops its
@@ -201,15 +207,28 @@ extension NCAppDelegate: NSMenuDelegate {
         // The crop cannot change during a recording, so the panel goes, keeping
         // the crop it shows.
         self.cropPanel?.dismiss()
-        self.movieRecorder = NCMovieRecorder.start(
-            recordingTo: url, options: recordingOptions, from: self.frameDistributor
+        // With a sound input, the recording gets a sound track in the format the sound is
+        // arriving in. A sound input that has not delivered anything yet has no format to
+        // go by, and the recording is made without it.
+        let soundFormat = self.soundInput == nil ? nil : self.soundTap.currentFormat
+        if self.soundInput != nil && soundFormat == nil {
+            NSLog("No sound has arrived yet; recording the picture only")
+        }
+        let recorder = NCMovieRecorder.start(
+            recordingTo: url, options: recordingOptions, soundFormat: soundFormat,
+            from: self.frameDistributor
         ) { [weak self] outcome in
             self?.recordingEnded(outcome)
+        }
+        self.movieRecorder = recorder
+        if soundFormat != nil {
+            self.soundTap.setRecorder(recorder)
         }
         self.recordingStateChanged()
     }
 
     private func recordingEnded(_ outcome: NCMovieRecorder.Outcome) {
+        self.soundTap.setRecorder(nil)
         self.movieRecorder = nil
         self.recordingStateChanged()
 

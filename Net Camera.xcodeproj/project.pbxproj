@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E1C4A70A2E93B41100D51C56 /* NCSoundTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C55 /* NCSoundTests.swift */; };
+		E1C4A70A2E93B41100D51C54 /* NCSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C52 /* NCSound.swift */; };
+		E1C4A70A2E93B41100D51C53 /* NCSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C52 /* NCSound.swift */; };
+		E1C4A70A2E93B41100D51C51 /* NCAppDelegate+Sound.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C50 /* NCAppDelegate+Sound.swift */; };
 		E1C4A70A2E93B41100D51C4F /* NCMovieRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C4E /* NCMovieRecorderTests.swift */; };
 		E1C4A70A2E93B41100D51C4D /* NCAppDelegate+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C4C /* NCAppDelegate+Recording.swift */; };
 		E1C4A70A2E93B41100D51C4B /* NCMovieRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C4A70A2E93B41100D51C49 /* NCMovieRecorder.swift */; };
@@ -47,6 +51,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E1C4A70A2E93B41100D51C55 /* NCSoundTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCSoundTests.swift; sourceTree = "<group>"; };
+		E1C4A70A2E93B41100D51C52 /* NCSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCSound.swift; sourceTree = "<group>"; };
+		E1C4A70A2E93B41100D51C50 /* NCAppDelegate+Sound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NCAppDelegate+Sound.swift"; sourceTree = "<group>"; };
 		E1C4A70A2E93B41100D51C4E /* NCMovieRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMovieRecorderTests.swift; sourceTree = "<group>"; };
 		E1C4A70A2E93B41100D51C4C /* NCAppDelegate+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NCAppDelegate+Recording.swift"; sourceTree = "<group>"; };
 		E1C4A70A2E93B41100D51C49 /* NCMovieRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMovieRecorder.swift; sourceTree = "<group>"; };
@@ -113,6 +120,7 @@
 				E1C4A70A2E93B41100D51C33 /* NCCameraAvailabilityTests.swift */,
 				E1C4A70A2E93B41100D51C15 /* NCFrameDistributorTests.swift */,
 				E1C4A70A2E93B41100D51C04 /* NCFrameTransformTests.swift */,
+				E1C4A70A2E93B41100D51C55 /* NCSoundTests.swift */,
 				E1C4A70A2E93B41100D51C4E /* NCMovieRecorderTests.swift */,
 				E1C4A70A2E93B41100D51C47 /* NCProfileStoreTests.swift */,
 				E1C4A70A2E93B41100D51C0E /* NCHarnessTests.swift */,
@@ -167,6 +175,8 @@
 			isa = PBXGroup;
 			children = (
 				E1C4A70A2E93B41100D51C30 /* NCCameraAvailability.swift */,
+				E1C4A70A2E93B41100D51C52 /* NCSound.swift */,
+				E1C4A70A2E93B41100D51C50 /* NCAppDelegate+Sound.swift */,
 				E1C4A70A2E93B41100D51C4C /* NCAppDelegate+Recording.swift */,
 				E1C4A70A2E93B41100D51C49 /* NCMovieRecorder.swift */,
 				E1C4A70A2E93B41100D51C45 /* NCAppDelegate+Profiles.swift */,
@@ -299,6 +309,8 @@
 				E1C4A70A2E93B41100D51C1B /* NCStillCaptureTests.swift in Sources */,
 				E1C4A70A2E93B41100D51C25 /* NCMJPEGSink.swift in Sources */,
 				E1C4A70A2E93B41100D51C27 /* NCMJPEGSinkTests.swift in Sources */,
+				E1C4A70A2E93B41100D51C56 /* NCSoundTests.swift in Sources */,
+				E1C4A70A2E93B41100D51C54 /* NCSound.swift in Sources */,
 				E1C4A70A2E93B41100D51C4F /* NCMovieRecorderTests.swift in Sources */,
 				E1C4A70A2E93B41100D51C4B /* NCMovieRecorder.swift in Sources */,
 				E1C4A70A2E93B41100D51C48 /* NCProfileStoreTests.swift in Sources */,
@@ -320,6 +332,8 @@
 				E1C4A70A2E93B41100D51C18 /* NCStillCapture.swift in Sources */,
 				E1C4A70A2E93B41100D51C1D /* NCHTTPServer.swift in Sources */,
 				E1C4A70A2E93B41100D51C24 /* NCMJPEGSink.swift in Sources */,
+				E1C4A70A2E93B41100D51C53 /* NCSound.swift in Sources */,
+				E1C4A70A2E93B41100D51C51 /* NCAppDelegate+Sound.swift in Sources */,
 				E1C4A70A2E93B41100D51C4D /* NCAppDelegate+Recording.swift in Sources */,
 				E1C4A70A2E93B41100D51C4A /* NCMovieRecorder.swift in Sources */,
 				E1C4A70A2E93B41100D51C46 /* NCAppDelegate+Profiles.swift in Sources */,

@@ -126,6 +126,10 @@ struct NCProfile: Equatable {
 
     var recording: NCRecordingOptions = NCRecordingOptions()
 
+    /// The sound input, by name. Empty for none: no sound is heard and none is
+    /// recorded.
+    var soundInputName: String = ""
+
     init(name: String) {
         self.name = name
     }
@@ -149,6 +153,7 @@ struct NCProfile: Equatable {
         static let recordingHeight = "recordingHeight"
         static let recordingSharp = "recordingSharp"
         static let recordingKeepsProportions = "recordingKeepsProportions"
+        static let soundInputName = "soundInputName"
     }
 
     /// Reads a profile back, forgivingly: anything missing or of the wrong type
@@ -196,6 +201,7 @@ struct NCProfile: Equatable {
         }
         recording.isSharp = values(Key.recordingSharp) as? Bool ?? false
         recording.keepsProportions = values(Key.recordingKeepsProportions) as? Bool ?? false
+        soundInputName = values(Key.soundInputName) as? String ?? ""
     }
 
     var dictionary: [String: Any] {
@@ -211,6 +217,7 @@ struct NCProfile: Equatable {
             Key.position: position,
             Key.recordingSharp: recording.isSharp,
             Key.recordingKeepsProportions: recording.keepsProportions,
+            Key.soundInputName: soundInputName,
         ]
         if let size = recording.size {
             result[Key.recordingWidth] = size.width

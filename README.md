@@ -95,7 +95,12 @@ Two projects, two different bargains. Neither is a criticism of the other.
   large picture leaves its pixels alone, and stretching a PAL picture to 4:3 puts
   its proportions right. Whatever would change the picture's size is greyed out
   while a recording runs; if it changes size anyway, the recording ends there and
-  keeps what it has. There is no sound yet.
+  keeps what it has.
+- **Sound.** *Camera › Sound Input* chooses a sound input for the profile — the
+  capture device's own, typically — or none. The chosen input is heard through the
+  speakers while *Monitor Sound* is on, and recorded with the picture, from the
+  same capture session and so on the same clock. With no input chosen there is no
+  sound anywhere.
 
 Beyond that, this is Quick Camera's behaviour, unchanged.
 

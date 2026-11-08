@@ -15,6 +15,8 @@ class NCSettingsManager {
     private enum Key {
         static let borderless = "borderless"
         static let aspectRatioFixed = "aspectRatioFixed"
+        static let monitorsSound = "monitorsSound"
+        static let removesSoundOffset = "removesSoundOffset"
     }
 
     // MARK: - Profiles
@@ -52,6 +54,13 @@ class NCSettingsManager {
         profiles.updateActive { $0.crop = value }
     }
 
+    /// The sound input the profile names, or empty for none.
+    var soundInputName: String { profile.soundInputName }
+
+    func setSoundInputName(_ value: String) {
+        profiles.updateActive { $0.soundInputName = value }
+    }
+
     var recording: NCRecordingOptions { profile.recording }
 
     func setRecording(_ value: NCRecordingOptions) {
@@ -82,6 +91,25 @@ class NCSettingsManager {
         UserDefaults.standard.set(value, forKey: Key.aspectRatioFixed)
     }
 
+    /// Whether the sound input is played out loud. The app's rather than a
+    /// profile's: whether the speakers may be used depends on where the Mac
+    /// is, not on which machine is plugged in.
+    private(set) var monitorsSound: Bool
+
+    func setMonitorsSound(_ value: Bool) {
+        monitorsSound = value
+        UserDefaults.standard.set(value, forKey: Key.monitorsSound)
+    }
+
+    /// Whether a constant offset is taken out of the sound (see `NCDCBlocker`). On unless
+    /// switched off, which is there to measure what a source actually delivers.
+    private(set) var removesSoundOffset: Bool
+
+    func setRemovesSoundOffset(_ value: Bool) {
+        removesSoundOffset = value
+        UserDefaults.standard.set(value, forKey: Key.removesSoundOffset)
+    }
+
     // MARK: - Singleton
 
     static let shared: NCSettingsManager = NCSettingsManager()
@@ -90,6 +118,9 @@ class NCSettingsManager {
         profiles = NCProfileStore()
         isBorderless = UserDefaults.standard.bool(forKey: Key.borderless)
         isAspectRatioFixed = UserDefaults.standard.bool(forKey: Key.aspectRatioFixed)
+        monitorsSound = UserDefaults.standard.object(forKey: Key.monitorsSound) as? Bool ?? true
+        removesSoundOffset =
+            UserDefaults.standard.object(forKey: Key.removesSoundOffset) as? Bool ?? true
         logSettings(label: "loaded")
     }
 
@@ -108,6 +139,8 @@ class NCSettingsManager {
         profiles = NCProfileStore()
         isBorderless = false
         isAspectRatioFixed = false
+        monitorsSound = true
+        removesSoundOffset = true
         logSettings(label: "cleared")
     }
 

@@ -79,13 +79,17 @@ final class NCMovieRecorderTests: XCTestCase {
     /// Records the given frames, stopping afterwards unless the recorder has
     /// already stopped itself, and waits for the outcome.
     private func record(
-        _ frames: [(width: Int, height: Int)], options: NCRecordingOptions = NCRecordingOptions()
+        _ frames: [(width: Int, height: Int)], options: NCRecordingOptions = NCRecordingOptions(),
+        withSound: Bool = false
     ) async throws -> (NCMovieRecorder.Outcome, NCFrameDistributor) {
         let distributor = NCFrameDistributor()
         let url = folder.appendingPathComponent("movie.mov")
         let ended = expectation(description: "the recording ended")
         var outcome: NCMovieRecorder.Outcome?
-        let recorder = NCMovieRecorder.start(recordingTo: url, options: options, from: distributor) {
+        let soundFormat = withSound ? try makeSoundFormat() : nil
+        let recorder = NCMovieRecorder.start(
+            recordingTo: url, options: options, soundFormat: soundFormat, from: distributor
+        ) {
             outcome = $0
             ended.fulfill()
         }
@@ -94,6 +98,11 @@ final class NCMovieRecorderTests: XCTestCase {
             distributor.deliver(
                 try makeFrame(width: size.width, height: size.height, shade: UInt8(index * 20)),
                 at: time(index))
+            // One frame's worth of sound, on the same clock: 1920 samples at
+            // 48 kHz is the 40 ms between two frames at 25 fps.
+            if let soundFormat {
+                recorder.receiveSound(try makeSound(format: soundFormat, at: time(index)))
+            }
             // An encoder given frames faster than real time may refuse some;
             // a little pacing keeps the counts meaningful without making the
             // test depend on them.
@@ -119,6 +128,83 @@ final class NCMovieRecorderTests: XCTestCase {
             if CMSampleBufferGetNumSamples(sample) > 0 { samples += 1 }
         }
         return (size, samples)
+    }
+
+    // MARK: - Sound
+
+    /// Stereo 32-bit float at 48 kHz, interleaved.
+    private func makeSoundFormat() throws -> CMAudioFormatDescription {
+        var description = AudioStreamBasicDescription(
+            mSampleRate: 48_000, mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 8, mFramesPerPacket: 1, mBytesPerFrame: 8,
+            mChannelsPerFrame: 2, mBitsPerChannel: 32, mReserved: 0)
+        var format: CMAudioFormatDescription?
+        CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault, asbd: &description, layoutSize: 0, layout: nil,
+            magicCookieSize: 0, magicCookie: nil, extensions: nil, formatDescriptionOut: &format)
+        return try XCTUnwrap(format)
+    }
+
+    /// 1920 frames of silence starting at `time`.
+    private func makeSound(format: CMAudioFormatDescription, at time: CMTime) throws
+        -> CMSampleBuffer
+    {
+        let frames = 1920
+        let length = frames * 8
+        var block: CMBlockBuffer?
+        CMBlockBufferCreateWithMemoryBlock(
+            allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: length,
+            blockAllocator: kCFAllocatorDefault, customBlockSource: nil, offsetToData: 0,
+            dataLength: length, flags: kCMBlockBufferAssureMemoryNowFlag, blockBufferOut: &block)
+        let data = try XCTUnwrap(block)
+        CMBlockBufferFillDataBytes(with: 0, blockBuffer: data, offsetIntoDestination: 0, dataLength: length)
+
+        var sample: CMSampleBuffer?
+        CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+            allocator: kCFAllocatorDefault, dataBuffer: data, formatDescription: format,
+            sampleCount: frames, presentationTimeStamp: time, packetDescriptions: nil,
+            sampleBufferOut: &sample)
+        return try XCTUnwrap(sample)
+    }
+
+    private func soundTrackCount(at url: URL) async throws -> Int {
+        try await AVURLAsset(url: url).loadTracks(withMediaType: .audio).count
+    }
+
+    /// AAC goes no further than 48 kHz and the track no further than stereo;
+    /// what comes in below that is kept.
+    func testTheSoundTrackIsAACWithinWhatAACTakes() throws {
+        var description = AudioStreamBasicDescription(
+            mSampleRate: 96_000, mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 2, mFramesPerPacket: 1, mBytesPerFrame: 2,
+            mChannelsPerFrame: 1, mBitsPerChannel: 16, mReserved: 0)
+        var format: CMAudioFormatDescription?
+        CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault, asbd: &description, layoutSize: 0, layout: nil,
+            magicCookieSize: 0, magicCookie: nil, extensions: nil, formatDescriptionOut: &format)
+
+        let settings = NCMovieRecorder.soundSettings(for: try XCTUnwrap(format))
+        XCTAssertEqual(settings[AVFormatIDKey] as? AudioFormatID, kAudioFormatMPEG4AAC)
+        XCTAssertEqual(settings[AVSampleRateKey] as? Double, 48_000)
+        XCTAssertEqual(settings[AVNumberOfChannelsKey] as? Int, 1)
+    }
+
+    func testARecordingWithSoundHasASoundTrack() async throws {
+        let (outcome, _) = try await record(Array(repeating: (128, 96), count: 10), withSound: true)
+
+        XCTAssertEqual(outcome.ending, .stopped)
+        let soundTracks = try await soundTrackCount(at: outcome.url)
+        XCTAssertEqual(soundTracks, 1)
+        let track = try await videoTrack(at: outcome.url)
+        XCTAssertEqual(track.samples, outcome.framesWritten, "the picture is unaffected")
+    }
+
+    func testARecordingWithoutSoundHasNoSoundTrack() async throws {
+        let (outcome, _) = try await record(Array(repeating: (128, 96), count: 5))
+        let soundTracks = try await soundTrackCount(at: outcome.url)
+        XCTAssertEqual(soundTracks, 0)
     }
 
     // MARK: - Tests

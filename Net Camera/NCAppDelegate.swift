@@ -232,6 +232,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         self.mjpegSink.setLive(false)
         // A recording ends with the picture, and keeps what it has.
         self.movieRecorder?.stop()
+        self.forgetSound()
 
         if self.captureSession != nil {
             // Late callbacks from a session being torn down would deliver the
@@ -464,6 +465,8 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
                 // chosen resolution in case the device was reconfigured behind us.
                 self.applyChosenResolution(to: device)
                 self.pictureIsShowing(from: device)
+                // A sound input may have come or gone with the same hot-plug.
+                self.updateSound()
                 return
             }
 
@@ -472,6 +475,8 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
             self.videoOutput?.setSampleBufferDelegate(nil, queue: nil)
             session.stopRunning()
         }
+        // The sound belonged to the old session; updateSound() attaches it to the new one.
+        self.forgetSound()
         captureSession = AVCaptureSession()
 
         do {
@@ -605,6 +610,9 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         self.aspectRatioFixedMenu.state = convertToNSControlStateValue(
             (isAspectRatioFixed
                 ? NSControl.StateValue.on.rawValue : NSControl.StateValue.off.rawValue))
+
+        // The profile's sound input, which may differ from the last profile's.
+        self.updateSound()
     }
 
     /// Writes the running camera and its resolution into the profile in use.
@@ -783,6 +791,18 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
 
     /// Whether the app is waiting for a recording to finish before it quits.
     var terminateAfterRecording: Bool = false
+
+    // MARK: - Sound state
+
+    /// Filters captured sound and hands it to the speakers and the recording.
+    let soundTap: NCSoundTap = NCSoundTap()
+
+    /// The capture session's sound input and the output it feeds, while there are any.
+    var soundInput: AVCaptureDeviceInput?
+    var soundDataOutput: AVCaptureAudioDataOutput?
+
+    /// Whether refused sound access has been explained since the sound input was last chosen.
+    var hasReportedSoundRefused: Bool = false
 
     @IBAction func showCropPanel(_ sender: NSMenuItem) {
         if let cropPanel {
@@ -972,6 +992,7 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         self.restoreWindow()
         self.installProfileMenu()
         self.installRecordingMenu()
+        self.installSoundMenu()
 
         // Listening before asking, so a camera plugged in while the permission
         // prompt is still on screen is not missed.

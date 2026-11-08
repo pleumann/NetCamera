@@ -100,29 +100,74 @@ final class NCMovieRecorder: NCFrameSink {
     private var framesDropped = 0
     private var isFinished = false
 
+    /// The sound being recorded alongside, if any: the format it arrives in,
+    /// fixed when the recording starts, and the track it is written to once
+    /// the first frame has opened the file.
+    private let soundFormat: CMAudioFormatDescription?
+    private var soundInput: AVAssetWriterInput?
+    private var sessionStart: CMTime = .invalid
+    private var soundBuffersWritten = 0
+
     // MARK: - Lifecycle
 
     /// Starts recording into `url`, replacing any file there, from the next
-    /// frame `distributor` delivers. `completion` runs once, on the main queue,
-    /// when the file is complete or has been given up.
+    /// frame `distributor` delivers. With a `soundFormat`, the file gets a
+    /// sound track too, fed through `receiveSound(_:)`. `completion` runs
+    /// once, on the main queue, when the file is complete or has been given up.
     static func start(
-        recordingTo url: URL, options: NCRecordingOptions, from distributor: NCFrameDistributor,
-        completion: @escaping (Outcome) -> Void
+        recordingTo url: URL, options: NCRecordingOptions, soundFormat: CMAudioFormatDescription? = nil,
+        from distributor: NCFrameDistributor, completion: @escaping (Outcome) -> Void
     ) -> NCMovieRecorder {
         let recorder = NCMovieRecorder(
-            url: url, options: options, distributor: distributor, completion: completion)
+            url: url, options: options, soundFormat: soundFormat, distributor: distributor,
+            completion: completion)
         distributor.add(recorder)
         return recorder
     }
 
     private init(
-        url: URL, options: NCRecordingOptions, distributor: NCFrameDistributor,
-        completion: @escaping (Outcome) -> Void
+        url: URL, options: NCRecordingOptions, soundFormat: CMAudioFormatDescription?,
+        distributor: NCFrameDistributor, completion: @escaping (Outcome) -> Void
     ) {
         self.url = url
         self.options = options
+        self.soundFormat = soundFormat
         self.distributor = distributor
         self.completion = completion
+    }
+
+    // MARK: - Sound
+
+    /// Takes a buffer of sound for the recording's sound track. Any queue.
+    ///
+    /// Sound that arrives before the first frame has opened the file, or that
+    /// was captured before it, is left out: the recording starts with its
+    /// picture. Sound the encoder is not ready for is dropped, as frames are,
+    /// rather than held up.
+    func receiveSound(_ buffer: CMSampleBuffer) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished, let soundInput, sessionStart.isValid,
+            CMSampleBufferGetPresentationTimeStamp(buffer) >= sessionStart,
+            soundInput.isReadyForMoreMediaData
+        else { return }
+        if soundInput.append(buffer) {
+            soundBuffersWritten += 1
+        }
+    }
+
+    /// The sound track's settings: AAC, at the input's channel count up to
+    /// stereo and its sample rate up to 48 kHz, which is as far as AAC goes.
+    static func soundSettings(for format: CMAudioFormatDescription) -> [String: Any] {
+        let description = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee
+        let channels = min(max(Int(description?.mChannelsPerFrame ?? 2), 1), 2)
+        let sampleRate = min(description?.mSampleRate ?? 48_000, 48_000)
+        return [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVNumberOfChannelsKey: channels,
+            AVSampleRateKey: sampleRate,
+            AVEncoderBitRateKey: channels == 1 ? 128_000 : 256_000,
+        ]
     }
 
     /// Ends the recording and completes the file.
@@ -219,6 +264,21 @@ final class NCMovieRecorder: NCFrameSink {
         }
         writer.add(input)
 
+        // The sound track, when there is sound. A track the writer will not
+        // take costs the sound, not the recording.
+        if let soundFormat {
+            let soundInput = AVAssetWriterInput(
+                mediaType: .audio, outputSettings: Self.soundSettings(for: soundFormat),
+                sourceFormatHint: soundFormat)
+            soundInput.expectsMediaDataInRealTime = true
+            if writer.canAdd(soundInput) {
+                writer.add(soundInput)
+                self.soundInput = soundInput
+            } else {
+                NSLog("NCMovieRecorder: the sound track was refused; recording the picture only")
+            }
+        }
+
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: input,
             sourcePixelBufferAttributes: [
@@ -235,6 +295,7 @@ final class NCMovieRecorder: NCFrameSink {
                     userInfo: [NSLocalizedDescriptionKey: "the file could not be opened"])
         }
         writer.startSession(atSourceTime: time)
+        sessionStart = time
 
         self.writer = writer
         self.input = input
@@ -308,6 +369,10 @@ final class NCMovieRecorder: NCFrameSink {
         }
 
         input.markAsFinished()
+        soundInput?.markAsFinished()
+        if soundInput != nil {
+            NSLog("NCMovieRecorder: %d sound buffers written", soundBuffersWritten)
+        }
         writer.finishWriting {
             if writer.status == .completed {
                 report(ending)
