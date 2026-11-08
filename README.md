@@ -84,7 +84,7 @@ Two projects, two different bargains. Neither is a criticism of the other.
   that are fed through the same capture device, created, duplicated, renamed and
   removed from the menu and chosen from the list beneath. Every change is written
   into the profile in use as it is made, so there is no Save Settings, and the
-  app starts with the profile it was last using. The window's size, position,
+  app starts with the profile it was last using, and the window title names it. The window's size, position,
   border and aspect-ratio lock are the app's, the same in every profile.
 
 - **Recording.** *Camera › Start Recording…* (⇧⌘R) asks where to save, then

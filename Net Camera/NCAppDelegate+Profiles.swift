@@ -51,6 +51,10 @@ extension NCAppDelegate {
 
         menu.addItem(.separator())
         menu.addItem(item("Clear All Settings…", #selector(clearSettings(_:))))
+
+        // Every change to the profiles ends here, renaming and duplicating
+        // included, and the title names the profile in use.
+        self.showProfileInTitle()
     }
 
     private func item(_ title: String, _ action: Selector) -> NSMenuItem {

@@ -529,12 +529,23 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     }
 
     /// Everything that follows from the picture being on screen: the window
-    /// names the camera, the explanation of its absence comes down, and the
+    /// names the profile, the explanation of its absence comes down, and the
     /// network stream has something to send again.
     private func pictureIsShowing(from device: AVCaptureDevice) {
-        self.setWindowTitle(detail: device.localizedName)
+        self.showProfileInTitle()
         self.dismissNoPictureSheet()
         self.mjpegSink.setLive(true)
+    }
+
+    /// Names the profile in use in the window title, while there is a picture.
+    ///
+    /// The profile rather than the camera, because the profile is what the user chose and
+    /// what decides the picture; the camera is one of its settings, and is ticked in Select
+    /// Source. Without a picture the title keeps saying why there is none, which matters
+    /// more than which profile is waiting for one.
+    func showProfileInTitle() {
+        guard self.captureSession != nil, self.availability.hasPicture else { return }
+        self.setWindowTitle(detail: NCSettingsManager.shared.profiles.active.name)
     }
 
     /// A camera that was there and would not start. Not fatal either: the app
