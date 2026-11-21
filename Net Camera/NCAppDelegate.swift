@@ -667,9 +667,14 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         window.title = self.windowTitle
         self.window.level = convertToNSWindowLevel(Int(CGWindowLevelForKey(.normalWindow)))
         window.isMovableByWindowBackground = false
+        // The title bar is back, and the recording lamp with it.
+        self.attachRecordingLamp()
     }
 
     private func removeBorder() {
+        // A title-bar accessory on a window without a title bar is an exception in AppKit,
+        // so the lamp comes off before the title bar does.
+        self.detachRecordingLamp()
         defaultBorderStyle = window.styleMask
         self.window.styleMask = [NSWindow.StyleMask.borderless, NSWindow.StyleMask.resizable]
         self.window.level = convertToNSWindowLevel(Int(CGWindowLevelForKey(.maximumWindow)))

@@ -61,9 +61,29 @@ extension NCAppDelegate: NSMenuDelegate {
         let accessory = NSTitlebarAccessoryViewController()
         accessory.view = container
         accessory.layoutAttribute = .trailing
-        self.window.addTitlebarAccessoryViewController(accessory)
         self.recordingLamp = accessory
+        attachRecordingLamp()
         updateRecordingLamp()
+    }
+
+    /// Puts the lamp into the title bar, if the window has one and the lamp is
+    /// not there already. A borderless window has none: AppKit raises an
+    /// exception for an accessory added to it, which at launch, with
+    /// borderless mode saved, cut the rest of launching short — the camera
+    /// search included.
+    func attachRecordingLamp() {
+        guard let lamp = self.recordingLamp, self.window.styleMask.contains(.titled),
+            !self.window.titlebarAccessoryViewControllers.contains(lamp)
+        else { return }
+        self.window.addTitlebarAccessoryViewController(lamp)
+    }
+
+    /// Takes the lamp out of the title bar, before the title bar goes.
+    func detachRecordingLamp() {
+        guard let lamp = self.recordingLamp,
+            let index = self.window.titlebarAccessoryViewControllers.firstIndex(of: lamp)
+        else { return }
+        self.window.removeTitlebarAccessoryViewController(at: index)
     }
 
     private func updateRecordingLamp() {
