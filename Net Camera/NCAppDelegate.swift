@@ -860,7 +860,18 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
     /// Copies the picture to the clipboard: the same still Save Image writes — cropped,
     /// turned and mirrored, at the camera's resolution rather than the window's — without
     /// a file in between.
+    ///
+    /// ⌘C belongs to this item, so that the menu shows it; the Camera menu comes before Edit,
+    /// so it is found first. Typed while a text field is being edited — a margin in the crop
+    /// panel — ⌘C means copying that text, as it does everywhere else, and is passed on to
+    /// it. Chosen with the mouse, the item always copies the picture.
     @IBAction func copyPicture(_ sender: Any?) {
+        if NSApp.currentEvent?.type == .keyDown,
+            let editor = NSApp.keyWindow?.firstResponder as? NSText
+        {
+            editor.copy(sender)
+            return
+        }
         NSLog("Copy Picture menu item selected")
         NCStillCapture.requestStill(from: self.frameDistributor) { [weak self] result in
             switch result {
@@ -876,8 +887,8 @@ class NCAppDelegate: NSObject, NSApplicationDelegate, NCUsbWatcherDelegate,
         }
     }
 
-    /// Edit › Copy and ⌘C, when nothing nearer in the responder chain has anything to copy
-    /// — no text field being edited — copy the picture, which is all the window shows.
+    /// Edit › Copy, when nothing nearer in the responder chain has anything to copy — no
+    /// text field being edited — copies the picture, which is all the window shows.
     @IBAction func copy(_ sender: Any?) {
         self.copyPicture(sender)
     }

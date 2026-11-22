@@ -59,7 +59,7 @@ Two projects, two different bargains. Neither is a criticism of the other.
 - **Save Image saves the picture, not a screenshot.** Quick Camera photographs its
   own window. Net Camera writes the frame the window is showing, at the camera's
   resolution rather than the window's, and so saves happily in full screen — which
-  the screenshot approach could not do at all. *Copy Picture* — or ⌘C — puts the
+  the screenshot approach could not do at all. *Copy Picture* (⌘C) puts the
   same picture on the clipboard instead of in a file.
 - **A built-in web server**, on port `50128`, always on, reachable from any machine
   that can reach the Mac. This is the netcam the fork exists for, and it is the
